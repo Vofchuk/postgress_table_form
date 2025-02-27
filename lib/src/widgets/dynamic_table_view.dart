@@ -5,7 +5,7 @@ import 'package:postgress_table_form/src/models/table_definition_model/table_def
 
 class DynamicTableView extends StatelessWidget {
   final TableDefinitionModel tableDefinition;
-  final List<Map<String, dynamic>> data;
+  final List<dynamic> data;
   const DynamicTableView({
     super.key,
     required this.tableDefinition,

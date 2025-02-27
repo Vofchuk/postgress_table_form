@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:postgress_table_form/src/models/column_definition _model/column_definition_model.dart';
 import 'package:postgress_table_form/src/models/postgress_data_type.dart';
 import 'package:postgress_table_form/src/models/table_definition_model/table_definiton_model.dart';
 
@@ -21,6 +22,16 @@ typedef ColumnNameMapper = String Function(String originalColumnName);
 /// should return a tooltip text to be shown when hovering over the column header.
 typedef TooltipMapper = String Function(
     String originalColumnName, PostgresDataType dataType, String isNullable);
+
+/// Callback for building custom cell widgets
+///
+/// This function receives the cell value, column definition, and the entire row data,
+/// and should return a Widget to be displayed in the cell.
+typedef CustomCellBuilder = Widget Function(
+  dynamic value,
+  ColumnDefinitionModel column,
+  Map<String, dynamic> rowData,
+);
 
 /// Enum to define the position of the actions column
 ///
@@ -151,11 +162,35 @@ class DynamicTableView extends StatelessWidget {
   /// Useful for hiding technical columns like IDs or timestamps.
   final List<String> hiddenColumns;
 
+  /// Custom order for columns. If provided, columns will be displayed in this order.
+  ///
+  /// Columns not included in this list will be displayed after the ordered columns
+  /// in their original order.
+  final List<String> columnOrder;
+
+  /// Map of column names to custom tooltips
+  ///
+  /// Provides specific tooltips for columns that override the default data type tooltips.
+  /// Only used when [showDataTypeTooltips] is true.
+  final Map<String, String> columnTooltips;
+
   /// Custom formatters for specific columns
   ///
   /// A map where keys are column names and values are functions that build
   /// custom widgets for cells in that column.
+  ///
+  /// This is the simple version that only receives the cell value.
+  /// For more advanced customization, use [advancedCustomCellBuilders].
   final Map<String, Widget Function(dynamic value)>? customCellBuilders;
+
+  /// Enhanced custom formatters for specific columns
+  ///
+  /// A map where keys are column names and values are functions that build
+  /// custom widgets for cells in that column.
+  ///
+  /// This version provides access to the column definition and the entire row data,
+  /// allowing for more complex cell rendering based on multiple fields.
+  final Map<String, CustomCellBuilder>? advancedCustomCellBuilders;
 
   /// Whether to show a horizontal scrollbar
   ///
@@ -195,7 +230,10 @@ class DynamicTableView extends StatelessWidget {
     this.enableRowSelection = false,
     this.onRowSelected,
     this.hiddenColumns = const [],
+    this.columnOrder = const [],
+    this.columnTooltips = const {},
     this.customCellBuilders,
+    this.advancedCustomCellBuilders,
     this.showHorizontalScrollbar = true,
     this.showVerticalScrollbar = true,
   });
@@ -269,6 +307,28 @@ class DynamicTableView extends StatelessWidget {
         .where((column) => !hiddenColumns.contains(column.columnName))
         .toList();
 
+    // Sort columns based on columnOrder if provided
+    if (columnOrder.isNotEmpty) {
+      visibleColumns.sort((a, b) {
+        final aIndex = columnOrder.indexOf(a.columnName);
+        final bIndex = columnOrder.indexOf(b.columnName);
+
+        // If both columns are in the columnOrder, sort by their index
+        if (aIndex >= 0 && bIndex >= 0) {
+          return aIndex.compareTo(bIndex);
+        }
+
+        // If only one column is in the columnOrder, it comes first
+        if (aIndex >= 0) return -1;
+        if (bIndex >= 0) return 1;
+
+        // If neither column is in the columnOrder, maintain their original order
+        return tableDefinition.columns
+            .indexOf(a)
+            .compareTo(tableDefinition.columns.indexOf(b));
+      });
+    }
+
     // Add actions column at the start if configured
     if (showActionsColumn &&
         actionsColumnPosition == ActionsColumnPosition.start) {
@@ -283,7 +343,10 @@ class DynamicTableView extends StatelessWidget {
 
       String? tooltip;
       if (showDataTypeTooltips) {
-        if (tooltipMapper != null) {
+        // Check if a custom tooltip is provided for this column
+        if (columnTooltips.containsKey(column.columnName)) {
+          tooltip = columnTooltips[column.columnName];
+        } else if (tooltipMapper != null) {
           tooltip = tooltipMapper!(
               column.columnName, column.dataType, column.isNullable);
         } else {
@@ -348,6 +411,28 @@ class DynamicTableView extends StatelessWidget {
           .where((column) => !hiddenColumns.contains(column.columnName))
           .toList();
 
+      // Sort columns based on columnOrder if provided
+      if (columnOrder.isNotEmpty) {
+        visibleColumns.sort((a, b) {
+          final aIndex = columnOrder.indexOf(a.columnName);
+          final bIndex = columnOrder.indexOf(b.columnName);
+
+          // If both columns are in the columnOrder, sort by their index
+          if (aIndex >= 0 && bIndex >= 0) {
+            return aIndex.compareTo(bIndex);
+          }
+
+          // If only one column is in the columnOrder, it comes first
+          if (aIndex >= 0) return -1;
+          if (bIndex >= 0) return 1;
+
+          // If neither column is in the columnOrder, maintain their original order
+          return tableDefinition.columns
+              .indexOf(a)
+              .compareTo(tableDefinition.columns.indexOf(b));
+        });
+      }
+
       // Add actions cell at the start if configured
       if (showActionsColumn &&
           actionsColumnPosition == ActionsColumnPosition.start) {
@@ -358,7 +443,17 @@ class DynamicTableView extends StatelessWidget {
       cells.addAll(visibleColumns.map((column) {
         final value = rowDataMap[column.columnName];
 
-        // Use custom cell builder if provided for this column
+        // Check for enhanced custom cell builder first
+        if (advancedCustomCellBuilders != null &&
+            advancedCustomCellBuilders!.containsKey(column.columnName)) {
+          return DataCell(
+            advancedCustomCellBuilders![column.columnName]!(
+                value, column, rowDataMap),
+            onTap: enableRowSelection ? () => _handleRowTap(rowDataMap) : null,
+          );
+        }
+
+        // Then check for simple custom cell builder
         if (customCellBuilders != null &&
             customCellBuilders!.containsKey(column.columnName)) {
           return DataCell(

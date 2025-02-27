@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:postgress_table_form/src/models/table_definition_model/table_definiton_model.dart';
-import 'package:postgress_table_form/src/widgets/dynamic_table_view.dart';
+import 'package:postgress_table_form/postgress_table_form.dart';
 
 import 'data/tableDef.dart';
 import 'data/table_data.dart';
@@ -35,6 +34,9 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  Map<String, dynamic>? _selectedRecord;
+  final int _selectedIndex = -1;
+
   @override
   void initState() {
     super.initState();
@@ -47,8 +49,72 @@ class _MyHomePageState extends State<MyHomePage> {
     // Create sample data
   }
 
+  void _handleRecordSelection(Map<String, dynamic> record) {
+    setState(() {
+      _selectedRecord = record;
+    });
+    _showFormDialog(record);
+  }
+
+  void _showFormDialog(Map<String, dynamic> record) {
+    final tableDefinition = TableDefinitionModel.fromList(tableDef);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.8,
+            height: MediaQuery.of(context).size.height * 0.8,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Edit Record',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: DynamicForm(
+                      tableDefinition: tableDefinition,
+                      initialData: record,
+                      onSubmit: (formData) {
+                        _handleFormSubmit(formData);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _handleFormSubmit(Map<String, dynamic> formData) {
+    // Handle the updated data
+    print('Updated data: $formData');
+    // In a real app, you would update the database or perform other actions
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tableDefinition = TableDefinitionModel.fromList(tableDef);
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -66,14 +132,64 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: DynamicTableView(
-                tableDefinition:
-                    TableDefinitionModel.fromJsonList("Incidents", tableDef),
-                data: tableData,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  // This is needed to ensure the table scrolls properly
+                  return false;
+                },
+                child: Stack(
+                  children: [
+                    DynamicTableView(
+                      tableDefinition: tableDefinition,
+                      data: tableData,
+                      enableRowSelection: true,
+                      showActionsColumn: true,
+                      columnNameMapper: (columnName) {
+                        return columnName.replaceAll('_', ' ');
+                      },
+                      // onRowSelected: _handleRecordSelection,
+                      actionBuilder: (record) {
+                        return IconButton(
+                          onPressed: () => _handleRecordSelection(record),
+                          icon: const Icon(Icons.edit),
+                        );
+                      },
+                    ),
+                    // Overlay a transparent ListView to handle taps
+                    // ListView.builder(
+                    //   itemCount: tableData.length,
+                    //   itemBuilder: (context, index) {
+                    //     return GestureDetector(
+                    //       onTap: () {
+                    //         setState(() {
+                    //           _selectedIndex = index;
+                    //           _selectedRecord = tableData[index];
+                    //         });
+                    //         _handleRecordSelection(tableData[index]);
+                    //       },
+                    //       child: Container(
+                    //         height: 52, // Approximate height of a table row
+                    //         color: Colors.transparent,
+                    //       ),
+                    //     );
+                    //   },
+                    // ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          setState(() {
+            _selectedRecord = null; // Clear selected record for new entry
+          });
+          _showFormDialog({});
+        },
+        tooltip: 'New Record',
+        child: const Icon(Icons.add),
       ),
     );
   }

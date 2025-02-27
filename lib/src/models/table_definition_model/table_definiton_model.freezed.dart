@@ -20,7 +20,7 @@ TableDefinitionModel _$TableDefinitionModelFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$TableDefinitionModel {
-  String get tableName => throw _privateConstructorUsedError;
+// required String tableName,
   List<ColumnDefinitionModel> get columns => throw _privateConstructorUsedError;
 
   /// Serializes this TableDefinitionModel to a JSON map.
@@ -39,7 +39,7 @@ abstract class $TableDefinitionModelCopyWith<$Res> {
           $Res Function(TableDefinitionModel) then) =
       _$TableDefinitionModelCopyWithImpl<$Res, TableDefinitionModel>;
   @useResult
-  $Res call({String tableName, List<ColumnDefinitionModel> columns});
+  $Res call({List<ColumnDefinitionModel> columns});
 }
 
 /// @nodoc
@@ -58,14 +58,9 @@ class _$TableDefinitionModelCopyWithImpl<$Res,
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? tableName = null,
     Object? columns = null,
   }) {
     return _then(_value.copyWith(
-      tableName: null == tableName
-          ? _value.tableName
-          : tableName // ignore: cast_nullable_to_non_nullable
-              as String,
       columns: null == columns
           ? _value.columns
           : columns // ignore: cast_nullable_to_non_nullable
@@ -82,7 +77,7 @@ abstract class _$$TableDefinitionModelImplCopyWith<$Res>
       __$$TableDefinitionModelImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String tableName, List<ColumnDefinitionModel> columns});
+  $Res call({List<ColumnDefinitionModel> columns});
 }
 
 /// @nodoc
@@ -98,14 +93,9 @@ class __$$TableDefinitionModelImplCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? tableName = null,
     Object? columns = null,
   }) {
     return _then(_$TableDefinitionModelImpl(
-      tableName: null == tableName
-          ? _value.tableName
-          : tableName // ignore: cast_nullable_to_non_nullable
-              as String,
       columns: null == columns
           ? _value._columns
           : columns // ignore: cast_nullable_to_non_nullable
@@ -118,17 +108,16 @@ class __$$TableDefinitionModelImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$TableDefinitionModelImpl extends _TableDefinitionModel {
   const _$TableDefinitionModelImpl(
-      {required this.tableName,
-      required final List<ColumnDefinitionModel> columns})
+      {required final List<ColumnDefinitionModel> columns})
       : _columns = columns,
         super._();
 
   factory _$TableDefinitionModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$TableDefinitionModelImplFromJson(json);
 
-  @override
-  final String tableName;
+// required String tableName,
   final List<ColumnDefinitionModel> _columns;
+// required String tableName,
   @override
   List<ColumnDefinitionModel> get columns {
     if (_columns is EqualUnmodifiableListView) return _columns;
@@ -138,7 +127,7 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
 
   @override
   String toString() {
-    return 'TableDefinitionModel(tableName: $tableName, columns: $columns)';
+    return 'TableDefinitionModel(columns: $columns)';
   }
 
   @override
@@ -146,15 +135,13 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$TableDefinitionModelImpl &&
-            (identical(other.tableName, tableName) ||
-                other.tableName == tableName) &&
             const DeepCollectionEquality().equals(other._columns, _columns));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, tableName, const DeepCollectionEquality().hash(_columns));
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(_columns));
 
   /// Create a copy of TableDefinitionModel
   /// with the given fields replaced by the non-null parameter values.
@@ -176,16 +163,14 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
 
 abstract class _TableDefinitionModel extends TableDefinitionModel {
   const factory _TableDefinitionModel(
-          {required final String tableName,
-          required final List<ColumnDefinitionModel> columns}) =
+          {required final List<ColumnDefinitionModel> columns}) =
       _$TableDefinitionModelImpl;
   const _TableDefinitionModel._() : super._();
 
   factory _TableDefinitionModel.fromJson(Map<String, dynamic> json) =
       _$TableDefinitionModelImpl.fromJson;
 
-  @override
-  String get tableName;
+// required String tableName,
   @override
   List<ColumnDefinitionModel> get columns;
 

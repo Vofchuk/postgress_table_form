@@ -14,7 +14,7 @@ void main() {
 
   setUp(() {
     // Initialize the table definition from the test data
-    tableDefinition = TableDefinitionModel.fromJsonList('incidents', tableDef);
+    tableDefinition = TableDefinitionModel.fromList(tableDef);
 
     // Convert the table data to the expected format
     data = List<Map<String, dynamic>>.from(tableData);

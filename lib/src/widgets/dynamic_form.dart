@@ -13,6 +13,15 @@ class DynamicForm extends StatefulWidget {
   final bool showSubmitButton;
   final String submitButtonText;
 
+  /// List of column names that should be readonly
+  final List<String> readonlyFields;
+
+  /// If true, all fields will be readonly unless specified in [editableFields]
+  final bool allFieldsReadonly;
+
+  /// List of column names that should be editable (used when [allFieldsReadonly] is true)
+  final List<String> editableFields;
+
   const DynamicForm({
     super.key,
     required this.tableDefinition,
@@ -20,6 +29,9 @@ class DynamicForm extends StatefulWidget {
     required this.onSubmit,
     this.showSubmitButton = true,
     this.submitButtonText = 'Submit',
+    this.readonlyFields = const [],
+    this.allFieldsReadonly = false,
+    this.editableFields = const [],
   });
 
   @override
@@ -35,6 +47,17 @@ class _DynamicFormState extends State<DynamicForm> {
   void initState() {
     super.initState();
     _initializeFormData();
+  }
+
+  /// Determines if a field should be readonly based on the widget configuration
+  bool _isFieldReadonly(String columnName) {
+    if (widget.allFieldsReadonly) {
+      // If all fields are readonly by default, check if this field is in the editable list
+      return !widget.editableFields.contains(columnName);
+    } else {
+      // Otherwise, check if this field is in the readonly list
+      return widget.readonlyFields.contains(columnName);
+    }
   }
 
   void _initializeFormData() {
@@ -174,55 +197,57 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget _buildFieldForColumn(ColumnDefinitionModel column) {
     final isRequired = column.isNullable != 'YES';
     final label = '${column.columnName}${isRequired ? ' *' : ''}';
+    final isReadonly = _isFieldReadonly(column.columnName);
 
     switch (column.dataType) {
       case PostgresDataType.boolean:
-        return _buildBooleanField(column, label);
+        return _buildBooleanField(column, label, isReadonly);
 
       case PostgresDataType.date:
-        return _buildDateField(column, label);
+        return _buildDateField(column, label, isReadonly);
 
       case PostgresDataType.timestamp:
       case PostgresDataType.timestampWithTimeZone:
-        return _buildDateTimeField(column, label);
+        return _buildDateTimeField(column, label, isReadonly);
 
       case PostgresDataType.integer:
       case PostgresDataType.smallint:
       case PostgresDataType.bigint:
       case PostgresDataType.serial:
       case PostgresDataType.bigserial:
-        return _buildIntegerField(column, label);
+        return _buildIntegerField(column, label, isReadonly);
 
       case PostgresDataType.decimal:
       case PostgresDataType.numeric:
       case PostgresDataType.real:
       case PostgresDataType.doublePrecision:
-        return _buildDecimalField(column, label);
+        return _buildDecimalField(column, label, isReadonly);
 
       case PostgresDataType.json:
       case PostgresDataType.jsonb:
-        return _buildJsonField(column, label);
+        return _buildJsonField(column, label, isReadonly);
 
       case PostgresDataType.integerArray:
       case PostgresDataType.textArray:
       case PostgresDataType.uuidArray:
-        return _buildArrayField(column, label);
+        return _buildArrayField(column, label, isReadonly);
 
       case PostgresDataType.userDefined:
         // If it's a user-defined type with enum options, create a dropdown
         if (column.enumOptions.isNotEmpty) {
-          return _buildDropdownField(column, label);
+          return _buildDropdownField(column, label, isReadonly);
         }
         // Fall back to text field if no enum options are provided
         // This allows handling custom types that aren't enums
-        return _buildTextField(column, label);
+        return _buildTextField(column, label, isReadonly);
 
       default:
-        return _buildTextField(column, label);
+        return _buildTextField(column, label, isReadonly);
     }
   }
 
-  Widget _buildTextField(ColumnDefinitionModel column, String label) {
+  Widget _buildTextField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -232,20 +257,27 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'Enter ${column.columnName}',
         border: const OutlineInputBorder(),
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
           return '${column.columnName} is required';
         }
         return null;
       },
-      onChanged: (value) {
-        _formData[column.columnName] = value;
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              _formData[column.columnName] = value;
+            },
     );
   }
 
-  Widget _buildIntegerField(ColumnDefinitionModel column, String label) {
+  Widget _buildIntegerField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -255,7 +287,11 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'Enter ${column.columnName}',
         border: const OutlineInputBorder(),
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       keyboardType: TextInputType.number,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
@@ -268,14 +304,17 @@ class _DynamicFormState extends State<DynamicForm> {
         }
         return null;
       },
-      onChanged: (value) {
-        _formData[column.columnName] =
-            value.isEmpty ? null : int.tryParse(value);
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              _formData[column.columnName] =
+                  value.isEmpty ? null : int.tryParse(value);
+            },
     );
   }
 
-  Widget _buildDecimalField(ColumnDefinitionModel column, String label) {
+  Widget _buildDecimalField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -285,7 +324,11 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'Enter ${column.columnName}',
         border: const OutlineInputBorder(),
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
@@ -298,14 +341,17 @@ class _DynamicFormState extends State<DynamicForm> {
         }
         return null;
       },
-      onChanged: (value) {
-        _formData[column.columnName] =
-            value.isEmpty ? null : double.tryParse(value);
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              _formData[column.columnName] =
+                  value.isEmpty ? null : double.tryParse(value);
+            },
     );
   }
 
-  Widget _buildBooleanField(ColumnDefinitionModel column, String label) {
+  Widget _buildBooleanField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final isRequired = column.isNullable != 'YES';
     final initialValue = _formData[column.columnName] as bool? ?? false;
 
@@ -325,10 +371,12 @@ class _DynamicFormState extends State<DynamicForm> {
               children: [
                 Checkbox(
                   value: field.value ?? false,
-                  onChanged: (newValue) {
-                    field.didChange(newValue);
-                    _formData[column.columnName] = newValue;
-                  },
+                  onChanged: isReadonly
+                      ? null
+                      : (newValue) {
+                          field.didChange(newValue);
+                          _formData[column.columnName] = newValue;
+                        },
                 ),
                 Text(label),
               ],
@@ -348,7 +396,8 @@ class _DynamicFormState extends State<DynamicForm> {
     );
   }
 
-  Widget _buildDateField(ColumnDefinitionModel column, String label) {
+  Widget _buildDateField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -358,24 +407,30 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'YYYY-MM-DD',
         border: const OutlineInputBorder(),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.calendar_today),
-          onPressed: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: DateTime.now(),
-              firstDate: DateTime(1900),
-              lastDate: DateTime(2100),
-            );
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
+        suffixIcon: isReadonly
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.calendar_today),
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(1900),
+                    lastDate: DateTime(2100),
+                  );
 
-            if (date != null) {
-              final formattedDate = DateFormat('yyyy-MM-dd').format(date);
-              controller.text = formattedDate;
-              _formData[column.columnName] = date;
-            }
-          },
-        ),
+                  if (date != null) {
+                    final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+                    controller.text = formattedDate;
+                    _formData[column.columnName] = date;
+                  }
+                },
+              ),
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
           return '${column.columnName} is required';
@@ -389,22 +444,25 @@ class _DynamicFormState extends State<DynamicForm> {
         }
         return null;
       },
-      onChanged: (value) {
-        if (value.isEmpty) {
-          _formData[column.columnName] = null;
-        } else {
-          try {
-            _formData[column.columnName] = DateTime.parse(value);
-          } catch (_) {
-            // Keep the string value until validation
-            _formData[column.columnName] = value;
-          }
-        }
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              if (value.isEmpty) {
+                _formData[column.columnName] = null;
+              } else {
+                try {
+                  _formData[column.columnName] = DateTime.parse(value);
+                } catch (_) {
+                  // Keep the string value until validation
+                  _formData[column.columnName] = value;
+                }
+              }
+            },
     );
   }
 
-  Widget _buildDateTimeField(ColumnDefinitionModel column, String label) {
+  Widget _buildDateTimeField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -414,39 +472,45 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'YYYY-MM-DD HH:MM:SS',
         border: const OutlineInputBorder(),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.calendar_today),
-          onPressed: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: DateTime.now(),
-              firstDate: DateTime(1900),
-              lastDate: DateTime(2100),
-            );
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
+        suffixIcon: isReadonly
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.calendar_today),
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(1900),
+                    lastDate: DateTime(2100),
+                  );
 
-            if (date != null) {
-              final time = await showTimePicker(
-                context: context,
-                initialTime: TimeOfDay.now(),
-              );
+                  if (date != null) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
 
-              if (time != null) {
-                final dateTime = DateTime(
-                  date.year,
-                  date.month,
-                  date.day,
-                  time.hour,
-                  time.minute,
-                );
-                final formattedDateTime =
-                    DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime);
-                controller.text = formattedDateTime;
-                _formData[column.columnName] = dateTime;
-              }
-            }
-          },
-        ),
+                    if (time != null) {
+                      final dateTime = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      );
+                      final formattedDateTime =
+                          DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime);
+                      controller.text = formattedDateTime;
+                      _formData[column.columnName] = dateTime;
+                    }
+                  }
+                },
+              ),
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
           return '${column.columnName} is required';
@@ -460,22 +524,25 @@ class _DynamicFormState extends State<DynamicForm> {
         }
         return null;
       },
-      onChanged: (value) {
-        if (value.isEmpty) {
-          _formData[column.columnName] = null;
-        } else {
-          try {
-            _formData[column.columnName] = DateTime.parse(value);
-          } catch (_) {
-            // Keep the string value until validation
-            _formData[column.columnName] = value;
-          }
-        }
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              if (value.isEmpty) {
+                _formData[column.columnName] = null;
+              } else {
+                try {
+                  _formData[column.columnName] = DateTime.parse(value);
+                } catch (_) {
+                  // Keep the string value until validation
+                  _formData[column.columnName] = value;
+                }
+              }
+            },
     );
   }
 
-  Widget _buildJsonField(ColumnDefinitionModel column, String label) {
+  Widget _buildJsonField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -485,7 +552,11 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'Enter JSON',
         border: const OutlineInputBorder(),
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       maxLines: 5,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
@@ -501,22 +572,25 @@ class _DynamicFormState extends State<DynamicForm> {
         }
         return null;
       },
-      onChanged: (value) {
-        if (value.isEmpty) {
-          _formData[column.columnName] = null;
-        } else {
-          try {
-            _formData[column.columnName] = jsonDecode(value);
-          } catch (_) {
-            // Keep the string value until validation
-            _formData[column.columnName] = value;
-          }
-        }
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              if (value.isEmpty) {
+                _formData[column.columnName] = null;
+              } else {
+                try {
+                  _formData[column.columnName] = jsonDecode(value);
+                } catch (_) {
+                  // Keep the string value until validation
+                  _formData[column.columnName] = value;
+                }
+              }
+            },
     );
   }
 
-  Widget _buildArrayField(ColumnDefinitionModel column, String label) {
+  Widget _buildArrayField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final controller = _controllers[column.columnName]!;
     final isRequired = column.isNullable != 'YES';
 
@@ -526,25 +600,32 @@ class _DynamicFormState extends State<DynamicForm> {
         labelText: label,
         hintText: 'Enter comma-separated values',
         border: const OutlineInputBorder(),
+        filled: isReadonly,
+        fillColor: isReadonly ? Colors.grey.shade200 : null,
       ),
+      readOnly: isReadonly,
+      enabled: !isReadonly,
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
           return '${column.columnName} is required';
         }
         return null;
       },
-      onChanged: (value) {
-        if (value.isEmpty) {
-          _formData[column.columnName] = null;
-        } else {
-          final items = value.split(',').map((e) => e.trim()).toList();
-          _formData[column.columnName] = items;
-        }
-      },
+      onChanged: isReadonly
+          ? null
+          : (value) {
+              if (value.isEmpty) {
+                _formData[column.columnName] = null;
+              } else {
+                final items = value.split(',').map((e) => e.trim()).toList();
+                _formData[column.columnName] = items;
+              }
+            },
     );
   }
 
-  Widget _buildDropdownField(ColumnDefinitionModel column, String label) {
+  Widget _buildDropdownField(
+      ColumnDefinitionModel column, String label, bool isReadonly) {
     final isRequired = column.isNullable != 'YES';
     String? initialValue = _formData[column.columnName] as String?;
 
@@ -578,6 +659,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 errorText: field.errorText,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                filled: isReadonly,
+                fillColor: isReadonly ? Colors.grey.shade200 : null,
               ),
               isEmpty: field.value == null || field.value!.isEmpty,
               child: DropdownButtonHideUnderline(
@@ -587,14 +670,16 @@ class _DynamicFormState extends State<DynamicForm> {
                   isExpanded: true,
                   icon: const Icon(Icons.arrow_drop_down),
                   hint: Text('Select ${column.columnName}'),
-                  onChanged: (String? newValue) {
-                    // Handle empty string as null
-                    final valueToStore = newValue == '' ? null : newValue;
-                    field.didChange(newValue);
-                    setState(() {
-                      _formData[column.columnName] = valueToStore;
-                    });
-                  },
+                  onChanged: isReadonly
+                      ? null
+                      : (String? newValue) {
+                          // Handle empty string as null
+                          final valueToStore = newValue == '' ? null : newValue;
+                          field.didChange(newValue);
+                          setState(() {
+                            _formData[column.columnName] = valueToStore;
+                          });
+                        },
                   items: [
                     if (!isRequired)
                       const DropdownMenuItem<String>(

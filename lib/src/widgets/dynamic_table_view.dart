@@ -21,7 +21,7 @@ typedef ColumnNameMapper = String Function(String originalColumnName);
 /// This function receives the original column name from the database and
 /// should return a tooltip text to be shown when hovering over the column header.
 typedef TooltipMapper = String Function(
-    String originalColumnName, PostgresDataType dataType, String isNullable);
+    String originalColumnName, PostgresDataType dataType, bool isNullable);
 
 /// Callback for building custom cell widgets
 ///
@@ -47,7 +47,30 @@ enum ActionsColumnPosition {
 /// This widget automatically generates a data table based on a table definition
 /// and a list of data. It supports customization of appearance, behavior, and
 /// provides features like sorting, filtering, and row selection.
-class DynamicTableView extends StatelessWidget {
+///
+/// Example usage with dropdown option mapping:
+/// ```dart
+/// DynamicTableView(
+///   tableDefinition: myTableDefinition,
+///   data: myData,
+///   // Map column names to display names
+///   columnNameMapper: (columnName) => columnName.replaceAll('_', ' ').toUpperCase(),
+///   // Map dropdown options to display values
+///   dropdownOptionMappers: {
+///     'status': {
+///       'ACTIVE': 'Active',
+///       'INACTIVE': 'Inactive',
+///       'PENDING': 'Pending Approval',
+///     },
+///     'user_type': {
+///       'admin': 'Administrator',
+///       'user': 'Regular User',
+///       'guest': 'Guest',
+///     },
+///   },
+/// )
+/// ```
+class DynamicTableView extends StatefulWidget {
   /// The table definition containing column information
   ///
   /// This model defines the structure of the table, including column names,
@@ -86,7 +109,7 @@ class DynamicTableView extends StatelessWidget {
   /// Example:
   /// ```dart
   /// tooltipMapper: (columnName, dataType, isNullable) =>
-  ///   'Column: $columnName\nType: ${dataType.toString().split('.').last}\nNullable: ${isNullable == 'YES'}',
+  ///   'Column: $columnName\nType: ${dataType.toString().split('.').last}\nNullable: ${isNullable}',
   /// ```
   final TooltipMapper? tooltipMapper;
 
@@ -174,6 +197,22 @@ class DynamicTableView extends StatelessWidget {
   /// Only used when [showDataTypeTooltips] is true.
   final Map<String, String> columnTooltips;
 
+  /// Map of column names to a map of dropdown option values to display names
+  /// This allows users to customize how dropdown options are displayed in the table
+  /// The key is the column name, and the value is a map of option values to display names
+  /// The option values are the values stored in the database, and the display names are the values shown to the user
+  ///
+  /// Example:
+  /// ```dart
+  /// {
+  ///   'status': {
+  ///     'ACTIVE': 'Active',
+  ///     'INACTIVE': 'Inactive',
+  ///   },
+  /// }
+  /// ```
+  final Map<String, Map<String, String>> dropdownOptionMappers;
+
   /// Custom formatters for specific columns
   ///
   /// A map where keys are column names and values are functions that build
@@ -232,6 +271,7 @@ class DynamicTableView extends StatelessWidget {
     this.hiddenColumns = const [],
     this.columnOrder = const [],
     this.columnTooltips = const {},
+    this.dropdownOptionMappers = const {},
     this.customCellBuilders,
     this.advancedCustomCellBuilders,
     this.showHorizontalScrollbar = true,
@@ -239,25 +279,48 @@ class DynamicTableView extends StatelessWidget {
   });
 
   @override
+  State<DynamicTableView> createState() => _DynamicTableViewState();
+}
+
+class _DynamicTableViewState extends State<DynamicTableView> {
+  // Controllers for scrolling
+  late final ScrollController _horizontalController;
+  late final ScrollController _verticalController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalController = ScrollController();
+    _verticalController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    _verticalController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     Widget tableWidget = DataTable(
       columns: _buildColumns(),
       rows: _buildRows(),
       headingRowColor: WidgetStateProperty.all(
-        headerBackgroundColor ?? Colors.grey.shade200,
+        widget.headerBackgroundColor ?? Colors.grey.shade200,
       ),
-      dataRowMinHeight: rowHeight ?? 48,
-      dataRowMaxHeight: rowHeight != null ? rowHeight! + 24 : 72,
-      columnSpacing: columnSpacing ?? 24,
+      dataRowMinHeight: widget.rowHeight ?? 48,
+      dataRowMaxHeight: widget.rowHeight != null ? widget.rowHeight! + 24 : 72,
+      columnSpacing: widget.columnSpacing ?? 24,
       horizontalMargin: 16,
-      showCheckboxColumn: enableRowSelection,
+      showCheckboxColumn: widget.enableRowSelection,
     );
 
     // Apply theme if provided
-    if (tableTheme != null) {
+    if (widget.tableTheme != null) {
       tableWidget = Theme(
         data: Theme.of(context).copyWith(
-          dataTableTheme: tableTheme,
+          dataTableTheme: widget.tableTheme,
         ),
         child: tableWidget,
       );
@@ -266,30 +329,36 @@ class DynamicTableView extends StatelessWidget {
     // Add scrollbars as needed
     Widget scrollableWidget = tableWidget;
 
-    if (showHorizontalScrollbar) {
+    if (widget.showHorizontalScrollbar) {
       scrollableWidget = Scrollbar(
+        controller: _horizontalController,
         thumbVisibility: true,
         child: SingleChildScrollView(
+          controller: _horizontalController,
           scrollDirection: Axis.horizontal,
           child: scrollableWidget,
         ),
       );
     } else {
       scrollableWidget = SingleChildScrollView(
+        controller: _horizontalController,
         scrollDirection: Axis.horizontal,
         child: scrollableWidget,
       );
     }
 
-    if (showVerticalScrollbar) {
+    if (widget.showVerticalScrollbar) {
       return Scrollbar(
+        controller: _verticalController,
         thumbVisibility: true,
         child: SingleChildScrollView(
+          controller: _verticalController,
           child: scrollableWidget,
         ),
       );
     } else {
       return SingleChildScrollView(
+        controller: _verticalController,
         child: scrollableWidget,
       );
     }
@@ -303,15 +372,15 @@ class DynamicTableView extends StatelessWidget {
     List<DataColumn> columns = [];
 
     // Filter out hidden columns
-    final visibleColumns = tableDefinition.columns
-        .where((column) => !hiddenColumns.contains(column.columnName))
+    final visibleColumns = widget.tableDefinition.columns
+        .where((column) => !widget.hiddenColumns.contains(column.columnName))
         .toList();
 
     // Sort columns based on columnOrder if provided
-    if (columnOrder.isNotEmpty) {
+    if (widget.columnOrder.isNotEmpty) {
       visibleColumns.sort((a, b) {
-        final aIndex = columnOrder.indexOf(a.columnName);
-        final bIndex = columnOrder.indexOf(b.columnName);
+        final aIndex = widget.columnOrder.indexOf(a.columnName);
+        final bIndex = widget.columnOrder.indexOf(b.columnName);
 
         // If both columns are in the columnOrder, sort by their index
         if (aIndex >= 0 && bIndex >= 0) {
@@ -323,35 +392,35 @@ class DynamicTableView extends StatelessWidget {
         if (bIndex >= 0) return 1;
 
         // If neither column is in the columnOrder, maintain their original order
-        return tableDefinition.columns
+        return widget.tableDefinition.columns
             .indexOf(a)
-            .compareTo(tableDefinition.columns.indexOf(b));
+            .compareTo(widget.tableDefinition.columns.indexOf(b));
       });
     }
 
     // Add actions column at the start if configured
-    if (showActionsColumn &&
-        actionsColumnPosition == ActionsColumnPosition.start) {
+    if (widget.showActionsColumn &&
+        widget.actionsColumnPosition == ActionsColumnPosition.start) {
       columns.add(_buildActionsColumn());
     }
 
     // Add data columns
     columns.addAll(visibleColumns.map((column) {
-      final displayName = columnNameMapper != null
-          ? columnNameMapper!(column.columnName)
+      final displayName = widget.columnNameMapper != null
+          ? widget.columnNameMapper!(column.columnName)
           : column.columnName;
 
       String? tooltip;
-      if (showDataTypeTooltips) {
+      if (widget.showDataTypeTooltips) {
         // Check if a custom tooltip is provided for this column
-        if (columnTooltips.containsKey(column.columnName)) {
-          tooltip = columnTooltips[column.columnName];
-        } else if (tooltipMapper != null) {
-          tooltip = tooltipMapper!(
+        if (widget.columnTooltips.containsKey(column.columnName)) {
+          tooltip = widget.columnTooltips[column.columnName];
+        } else if (widget.tooltipMapper != null) {
+          tooltip = widget.tooltipMapper!(
               column.columnName, column.dataType, column.isNullable);
         } else {
           tooltip =
-              '${column.dataType.toString().split('.').last} ${column.isNullable == 'YES' ? '(nullable)' : ''}';
+              '${column.dataType.toString().split('.').last} ${column.isNullable ? '(nullable)' : ''}';
         }
       }
 
@@ -359,8 +428,8 @@ class DynamicTableView extends StatelessWidget {
         label: Expanded(
           child: Text(
             displayName,
-            style:
-                headerTextStyle ?? const TextStyle(fontWeight: FontWeight.bold),
+            style: widget.headerTextStyle ??
+                const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
         tooltip: tooltip,
@@ -368,8 +437,8 @@ class DynamicTableView extends StatelessWidget {
     }).toList());
 
     // Add actions column at the end if configured
-    if (showActionsColumn &&
-        actionsColumnPosition == ActionsColumnPosition.end) {
+    if (widget.showActionsColumn &&
+        widget.actionsColumnPosition == ActionsColumnPosition.end) {
       columns.add(_buildActionsColumn());
     }
 
@@ -383,9 +452,9 @@ class DynamicTableView extends StatelessWidget {
     return DataColumn(
       label: Expanded(
         child: Text(
-          actionsColumnTitle,
-          style:
-              headerTextStyle ?? const TextStyle(fontWeight: FontWeight.bold),
+          widget.actionsColumnTitle,
+          style: widget.headerTextStyle ??
+              const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -396,7 +465,7 @@ class DynamicTableView extends StatelessWidget {
   /// Creates DataRow objects for each item in the data list, with cells
   /// corresponding to the visible columns.
   List<DataRow> _buildRows() {
-    return data.map((rowData) {
+    return widget.data.map((rowData) {
       // Convert rowData to a Map<String, dynamic> if it's not already
       final Map<String, dynamic> rowDataMap = rowData is Map<String, dynamic>
           ? rowData
@@ -407,15 +476,15 @@ class DynamicTableView extends StatelessWidget {
       List<DataCell> cells = [];
 
       // Filter out hidden columns
-      final visibleColumns = tableDefinition.columns
-          .where((column) => !hiddenColumns.contains(column.columnName))
+      final visibleColumns = widget.tableDefinition.columns
+          .where((column) => !widget.hiddenColumns.contains(column.columnName))
           .toList();
 
       // Sort columns based on columnOrder if provided
-      if (columnOrder.isNotEmpty) {
+      if (widget.columnOrder.isNotEmpty) {
         visibleColumns.sort((a, b) {
-          final aIndex = columnOrder.indexOf(a.columnName);
-          final bIndex = columnOrder.indexOf(b.columnName);
+          final aIndex = widget.columnOrder.indexOf(a.columnName);
+          final bIndex = widget.columnOrder.indexOf(b.columnName);
 
           // If both columns are in the columnOrder, sort by their index
           if (aIndex >= 0 && bIndex >= 0) {
@@ -427,15 +496,15 @@ class DynamicTableView extends StatelessWidget {
           if (bIndex >= 0) return 1;
 
           // If neither column is in the columnOrder, maintain their original order
-          return tableDefinition.columns
+          return widget.tableDefinition.columns
               .indexOf(a)
-              .compareTo(tableDefinition.columns.indexOf(b));
+              .compareTo(widget.tableDefinition.columns.indexOf(b));
         });
       }
 
       // Add actions cell at the start if configured
-      if (showActionsColumn &&
-          actionsColumnPosition == ActionsColumnPosition.start) {
+      if (widget.showActionsColumn &&
+          widget.actionsColumnPosition == ActionsColumnPosition.start) {
         cells.add(_buildActionsCell(rowDataMap));
       }
 
@@ -444,33 +513,39 @@ class DynamicTableView extends StatelessWidget {
         final value = rowDataMap[column.columnName];
 
         // Check for enhanced custom cell builder first
-        if (advancedCustomCellBuilders != null &&
-            advancedCustomCellBuilders!.containsKey(column.columnName)) {
+        if (widget.advancedCustomCellBuilders != null &&
+            widget.advancedCustomCellBuilders!.containsKey(column.columnName)) {
           return DataCell(
-            advancedCustomCellBuilders![column.columnName]!(
+            widget.advancedCustomCellBuilders![column.columnName]!(
                 value, column, rowDataMap),
-            onTap: enableRowSelection ? () => _handleRowTap(rowDataMap) : null,
+            onTap: widget.enableRowSelection
+                ? () => _handleRowTap(rowDataMap)
+                : null,
           );
         }
 
         // Then check for simple custom cell builder
-        if (customCellBuilders != null &&
-            customCellBuilders!.containsKey(column.columnName)) {
+        if (widget.customCellBuilders != null &&
+            widget.customCellBuilders!.containsKey(column.columnName)) {
           return DataCell(
-            customCellBuilders![column.columnName]!(value),
-            onTap: enableRowSelection ? () => _handleRowTap(rowDataMap) : null,
+            widget.customCellBuilders![column.columnName]!(value),
+            onTap: widget.enableRowSelection
+                ? () => _handleRowTap(rowDataMap)
+                : null,
           );
         }
 
         return DataCell(
-          _buildCellWidget(value, column.dataType),
-          onTap: enableRowSelection ? () => _handleRowTap(rowDataMap) : null,
+          _buildCellWidget(value, column.dataType, column.columnName),
+          onTap: widget.enableRowSelection
+              ? () => _handleRowTap(rowDataMap)
+              : null,
         );
       }).toList());
 
       // Add actions cell at the end if configured
-      if (showActionsColumn &&
-          actionsColumnPosition == ActionsColumnPosition.end) {
+      if (widget.showActionsColumn &&
+          widget.actionsColumnPosition == ActionsColumnPosition.end) {
         cells.add(_buildActionsCell(rowDataMap));
       }
 
@@ -484,7 +559,9 @@ class DynamicTableView extends StatelessWidget {
   /// or an empty widget if no builder is provided.
   DataCell _buildActionsCell(Map<String, dynamic> rowData) {
     return DataCell(
-      actionBuilder != null ? actionBuilder!(rowData) : const SizedBox.shrink(),
+      widget.actionBuilder != null
+          ? widget.actionBuilder!(rowData)
+          : const SizedBox.shrink(),
     );
   }
 
@@ -492,8 +569,8 @@ class DynamicTableView extends StatelessWidget {
   ///
   /// Calls the onRowSelected callback with the row data if provided.
   void _handleRowTap(Map<String, dynamic> rowData) {
-    if (onRowSelected != null) {
-      onRowSelected!(rowData);
+    if (widget.onRowSelected != null) {
+      widget.onRowSelected!(rowData);
     }
   }
 
@@ -501,7 +578,8 @@ class DynamicTableView extends StatelessWidget {
   ///
   /// This method formats and displays values differently depending on their PostgreSQL data type.
   /// For example, dates are formatted as dates, booleans as checkmarks, etc.
-  Widget _buildCellWidget(dynamic value, PostgresDataType dataType) {
+  Widget _buildCellWidget(
+      dynamic value, PostgresDataType dataType, String columnName) {
     if (value == null) {
       return const Text('NULL',
           style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
@@ -517,7 +595,7 @@ class DynamicTableView extends StatelessWidget {
         case PostgresDataType.bigserial:
           return Text(
             value.toString(),
-            style: cellTextStyle,
+            style: widget.cellTextStyle,
           );
 
         case PostgresDataType.decimal:
@@ -528,16 +606,28 @@ class DynamicTableView extends StatelessWidget {
               value is num ? value : num.tryParse(value.toString()) ?? 0;
           return Text(
             NumberFormat('#,##0.00').format(numValue),
-            style: cellTextStyle,
+            style: widget.cellTextStyle,
           );
 
         // Character Types
         case PostgresDataType.characterVarying:
         case PostgresDataType.character:
         case PostgresDataType.text:
+          // Check if we have a dropdown option mapper for this column
+          if (widget.dropdownOptionMappers.containsKey(columnName)) {
+            final optionMapper = widget.dropdownOptionMappers[columnName];
+            if (optionMapper != null &&
+                optionMapper.containsKey(value.toString())) {
+              // Use the mapped display value
+              return Text(
+                optionMapper[value.toString()]!,
+                style: widget.cellTextStyle,
+              );
+            }
+          }
           return Text(
             value.toString(),
-            style: cellTextStyle,
+            style: widget.cellTextStyle,
           );
 
         // Date & Time Types
@@ -549,13 +639,13 @@ class DynamicTableView extends StatelessWidget {
             try {
               date = DateTime.parse(value);
             } catch (_) {
-              return Text(value, style: cellTextStyle);
+              return Text(value, style: widget.cellTextStyle);
             }
           }
           return date != null
               ? Text(DateFormat('yyyy-MM-dd').format(date),
-                  style: cellTextStyle)
-              : Text(value.toString(), style: cellTextStyle);
+                  style: widget.cellTextStyle)
+              : Text(value.toString(), style: widget.cellTextStyle);
 
         case PostgresDataType.timestamp:
         case PostgresDataType.timestampWithTimeZone:
@@ -566,20 +656,20 @@ class DynamicTableView extends StatelessWidget {
             try {
               date = DateTime.parse(value);
             } catch (_) {
-              return Text(value, style: cellTextStyle);
+              return Text(value, style: widget.cellTextStyle);
             }
           }
           return date != null
               ? Text(DateFormat('yyyy-MM-dd HH:mm:ss').format(date),
-                  style: cellTextStyle)
-              : Text(value.toString(), style: cellTextStyle);
+                  style: widget.cellTextStyle)
+              : Text(value.toString(), style: widget.cellTextStyle);
 
         case PostgresDataType.time:
         case PostgresDataType.timeWithTimeZone:
-          return Text(value.toString(), style: cellTextStyle);
+          return Text(value.toString(), style: widget.cellTextStyle);
 
         case PostgresDataType.interval:
-          return Text(value.toString(), style: cellTextStyle);
+          return Text(value.toString(), style: widget.cellTextStyle);
 
         // Boolean Type
         case PostgresDataType.boolean:
@@ -592,7 +682,7 @@ class DynamicTableView extends StatelessWidget {
           } else if (value is num) {
             boolValue = value != 0;
           } else {
-            return Text(value.toString(), style: cellTextStyle);
+            return Text(value.toString(), style: widget.cellTextStyle);
           }
 
           return Icon(
@@ -604,8 +694,8 @@ class DynamicTableView extends StatelessWidget {
         case PostgresDataType.uuid:
           return Text(
             value.toString(),
-            style: cellTextStyle != null
-                ? cellTextStyle!.copyWith(fontFamily: 'monospace')
+            style: widget.cellTextStyle != null
+                ? widget.cellTextStyle!.copyWith(fontFamily: 'monospace')
                 : const TextStyle(fontFamily: 'monospace'),
           );
 
@@ -616,8 +706,8 @@ class DynamicTableView extends StatelessWidget {
             message: value.toString(),
             child: Text(
               'JSON',
-              style: cellTextStyle != null
-                  ? cellTextStyle!.copyWith(
+              style: widget.cellTextStyle != null
+                  ? widget.cellTextStyle!.copyWith(
                       color: Colors.blue, decoration: TextDecoration.underline)
                   : const TextStyle(
                       color: Colors.blue, decoration: TextDecoration.underline),
@@ -639,15 +729,15 @@ class DynamicTableView extends StatelessWidget {
             // Try to handle other string formats
             array = value.split(',');
           } else {
-            return Text(value.toString(), style: cellTextStyle);
+            return Text(value.toString(), style: widget.cellTextStyle);
           }
 
           return Tooltip(
             message: array.join(', '),
             child: Text(
               'Array[${array.length}]',
-              style: cellTextStyle != null
-                  ? cellTextStyle!.copyWith(color: Colors.blue)
+              style: widget.cellTextStyle != null
+                  ? widget.cellTextStyle!.copyWith(color: Colors.blue)
                   : const TextStyle(color: Colors.blue),
             ),
           );
@@ -664,25 +754,37 @@ class DynamicTableView extends StatelessWidget {
             message: value.toString(),
             child: Text(
               'Geometric',
-              style: cellTextStyle != null
-                  ? cellTextStyle!.copyWith(color: Colors.purple)
+              style: widget.cellTextStyle != null
+                  ? widget.cellTextStyle!.copyWith(color: Colors.purple)
                   : const TextStyle(color: Colors.purple),
             ),
           );
 
         // Custom Types
         case PostgresDataType.userDefined:
-          return Text(value.toString(), style: cellTextStyle);
+          // For user-defined types, check if we have a dropdown option mapper for this column
+          if (widget.dropdownOptionMappers.containsKey(columnName)) {
+            final optionMapper = widget.dropdownOptionMappers[columnName];
+            if (optionMapper != null &&
+                optionMapper.containsKey(value.toString())) {
+              // Use the mapped display value
+              return Text(
+                optionMapper[value.toString()]!,
+                style: widget.cellTextStyle,
+              );
+            }
+          }
+          return Text(value.toString(), style: widget.cellTextStyle);
 
         default:
-          return Text(value.toString(), style: cellTextStyle);
+          return Text(value.toString(), style: widget.cellTextStyle);
       }
     } catch (e) {
       // Fallback for any errors during rendering
       return Text(
         value.toString(),
-        style: cellTextStyle != null
-            ? cellTextStyle!.copyWith(color: Colors.red)
+        style: widget.cellTextStyle != null
+            ? widget.cellTextStyle!.copyWith(color: Colors.red)
             : const TextStyle(color: Colors.red),
       );
     }

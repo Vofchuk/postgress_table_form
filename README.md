@@ -13,495 +13,454 @@ and the Flutter guide for
 
 # PostgreSQL Table Form
 
-A Flutter package that automatically generates form widgets based on PostgreSQL table definitions. This package simplifies the process of creating CRUD interfaces for your PostgreSQL database tables.
-
-## Table of Contents
-- [Features](#features)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
-  - [Creating a Reusable PostgreSQL Function](#creating-a-reusable-postgresql-function)
-- [Complete Example: Building a CRUD Interface](#complete-example-building-a-crud-interface)
-  - [Project Structure](#project-structure)
-  - [Application Setup](#step-1-application-setup)
-  - [Main Page Setup](#step-2-main-page-setup)
-  - [Record Selection and Form Dialog](#step-3-record-selection-and-form-dialog)
-  - [Building the UI with Table View](#step-4-building-the-ui-with-table-view)
-  - [Key Components Explained](#key-components-explained)
-  - [Data Files](#data-files)
-- [How It Works](#how-it-works)
-- [Customization](#customization)
-- [Additional Information](#additional-information)
-
-## Overview
-
-PostgreSQL Table Form is designed to dramatically reduce development time for admin panels and data management applications. By automatically generating both form interfaces and table views directly from your PostgreSQL database schema, this package eliminates the need to manually create and maintain CRUD operations for each database table.
-
-### Perfect for Admin Panels
-
-This package is particularly valuable for:
-- **Admin dashboards** that need to manage multiple database tables
-- **Back-office applications** requiring data entry and management interfaces
-- **Content management systems** where editors need to update database records
-- **Internal tools** for data manipulation and reporting
-
-### Comprehensive CRUD Solution
-
-The package provides two main components:
-
-1. **DynamicForm**: Automatically generates form fields based on your PostgreSQL table structure, handling:
-   - Field types appropriate for each database column type
-   - Validation based on database constraints
-   - Default values and nullable fields
-
-2. **DynamicTableView**: Displays your data in a customizable table format with:
-   - Sortable columns
-   - Pagination
-   - Row selection
-   - Action buttons for edit/delete operations
-   - Customizable column rendering
-
-By combining these components, you can create a complete CRUD interface with minimal code, saving days or even weeks of development time.
+A Flutter package for dynamically generating forms and tables based on PostgreSQL table definitions.
 
 ## Features
 
-- Automatically generates form fields based on PostgreSQL column types
-- Supports various PostgreSQL data types including text, numeric, boolean, date/time, and **enums**
-- Handles nullable fields and default values
-- Provides validation based on database constraints
-- Customizable form appearance and behavior
-- Easy integration with Flutter applications
+- Dynamic form generation based on PostgreSQL table definitions
+- Dynamic table view generation based on PostgreSQL table definitions
+- CRUD (Create, Read, Update, Delete) operations with a single component
+- Support for various field types (text, boolean, date, datetime, integer, decimal, JSON, array, dropdown)
+- Form validation
+- Form grouping
+- Custom field ordering
+- Custom field labels
+- Custom field help text
+- Custom field hint text
+- Custom field validation
+- Form-level validation
 
-## Getting started
-
-Add the package to your `pubspec.yaml`:
+## Installation
 
 ```yaml
 dependencies:
-  postgress_table_form: <latest version>
-```
-
-Then run:
-
-```bash
-flutter pub get
+  postgress_table_form: ^1.0.0
 ```
 
 ## Usage
 
-1. First, extract your PostgreSQL table definition by running the following SQL query:
-
-```sql
-SELECT json_agg(
-    json_build_object(
-        'column_name', column_name,
-        'data_type', data_type,
-        'is_nullable', is_nullable,
-        'column_default', column_default,
-        'enum_options', 
-        CASE 
-            WHEN data_type = 'USER-DEFINED' THEN (
-                SELECT json_agg(enumlabel) 
-                FROM pg_enum 
-                JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
-                WHERE pg_type.typname = udt_name
-            ) 
-            ELSE NULL 
-        END
-    )
-)
-FROM information_schema.columns
-WHERE table_name = '<table name>' AND table_schema = 'public';
-```
-
-Replace `<table name>` with your actual table name.
-
-### Creating a Reusable PostgreSQL Function
-
-For convenience, you can create a reusable PostgreSQL function that extracts table schemas:
-
-```sql
-CREATE OR REPLACE FUNCTION get_table_schema_json(
-    p_table_name TEXT,
-    p_schema_name TEXT DEFAULT 'public'
-) RETURNS JSON AS $$
-DECLARE
-    schema_json JSON;
-BEGIN
-    SELECT json_agg(
-        json_build_object(
-            'table_name', table_name,
-            'column_name', column_name,
-            'data_type', data_type,
-            'is_nullable', is_nullable,
-            'column_default', column_default,
-            'enum_options', 
-            CASE 
-                WHEN data_type = 'USER-DEFINED' THEN (
-                    SELECT json_agg(enumlabel) 
-                    FROM pg_enum 
-                    JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
-                    WHERE pg_type.typname = udt_name
-                ) 
-                ELSE NULL 
-            END
-        )
-    )
-    INTO schema_json
-    FROM information_schema.columns
-    WHERE table_name = p_table_name AND table_schema = p_schema_name;
-
-    RETURN schema_json;
-END;
-$$ LANGUAGE plpgsql;
-```
-
-Then you can easily get the schema for any table:
-
-```sql
--- Get schema for a table in the public schema
-SELECT get_table_schema_json('users');
-
--- Get schema for a table in a different schema
-SELECT get_table_schema_json('users', 'auth');
-```
-
-2. Use the resulting JSON to create your form:
+### Basic Form
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:postgress_table_form/postgress_table_form.dart';
 
-class MyFormPage extends StatelessWidget {
-  final String tableDefinition; // JSON string from the SQL query
-
-  const MyFormPage({Key? key, required this.tableDefinition}) : super(key: key);
-
+class MyForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // Define your table
+    final tableDefinition = TableDefinitionModel(
+      tableName: 'users',
+      columns: [
+        ColumnDefinitionModel(
+          columnName: 'name',
+          dataType: PostgresDataType.text,
+          isNullable: false,
+        ),
+        ColumnDefinitionModel(
+          columnName: 'email',
+          dataType: PostgresDataType.text,
+          isNullable: false,
+        ),
+        ColumnDefinitionModel(
+          columnName: 'age',
+          dataType: PostgresDataType.integer,
+          isNullable: true,
+        ),
+      ],
+    );
+
     return Scaffold(
-      appBar: AppBar(title: Text('PostgreSQL Form')),
-      body: PostgresTableForm(
-        tableDefinition: tableDefinition,
-        onSubmit: (formData) {
-          // Handle the submitted form data
-          print(formData);
-        },
+      appBar: AppBar(title: Text('User Form')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: DynamicForm(
+          tableDefinition: tableDefinition,
+          onSubmit: (formData) {
+            print('Form submitted: $formData');
+          },
+        ),
       ),
     );
   }
 }
 ```
 
-## Complete Example: Building a CRUD Interface
+### Using Individual Form Widgets
 
-Below is a comprehensive example showing how to build a complete CRUD (Create, Read, Update, Delete) interface using the PostgreSQL Table Form package. The example demonstrates:
-
-1. Setting up the application
-2. Displaying table data in a dynamic table view
-3. Creating and editing records with forms
-4. Handling form submissions
-
-### Project Structure
-
-First, organize your project with these files:
-- `main.dart` - Main application entry point
-- `data/tableDef.dart` - Contains your table definition from PostgreSQL (in a real app, this would come from your database, dinamicaly)
-- `data/table_data.dart` - Contains your table data (in a real app, this would come from your database)
-
-### Step 1: Application Setup
+You can also use the individual form widgets directly:
 
 ```dart
-// Import necessary packages
 import 'package:flutter/material.dart';
 import 'package:postgress_table_form/postgress_table_form.dart';
 
-import 'data/tableDef.dart';  // Your table definition
-import 'data/table_data.dart'; // Your table data
-
-void main() {
-  runApp(const MyApp());
+class MyCustomForm extends StatefulWidget {
+  @override
+  _MyCustomFormState createState() => _MyCustomFormState();
 }
 
-// Main application widget
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class _MyCustomFormState extends State<MyCustomForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
+  bool _isActive = false;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PostgreSQL Table Form Example',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'PostgreSQL Table Form Example'),
-    );
-  }
-}
-```
-
-### Step 2: Main Page Setup
-
-```dart
-// Main page widget with state management
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  // State variables to track selected records
-  Map<String, dynamic>? _selectedRecord;
-  final int _selectedIndex = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeData();
-  }
-
-  void _initializeData() {
-    // In a real app, you would fetch data from your database here
-    // For this example, we're using static data from table_data.dart
-  }
-}
-```
-
-### Step 3: Record Selection and Form Dialog
-
-```dart
-  // Handle when a user selects a record from the table
-  void _handleRecordSelection(Map<String, dynamic> record) {
-    setState(() {
-      _selectedRecord = record;
-    });
-    _showFormDialog(record);
-  }
-
-  // Show a dialog with a form for editing the selected record
-  void _showFormDialog(Map<String, dynamic> record) {
-    // Convert the table definition from JSON to a model
-    final tableDefinition = TableDefinitionModel.fromList(tableDef);
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.8,
-            height: MediaQuery.of(context).size.height * 0.8,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Dialog header with title and close button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Edit Record',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Dynamic form generated from table definition
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: DynamicForm(
-                      tableDefinition: tableDefinition,
-                      initialData: record,  // Pre-fill form with selected record data
-                      onSubmit: (formData) {
-                        _handleFormSubmit(formData);
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                  ),
-                ),
-              ],
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          TextFormFieldWidget(
+            column: ColumnDefinitionModel(
+              columnName: 'name',
+              dataType: PostgresDataType.text,
+              isNullable: false,
             ),
+            label: 'Name',
+            isRequired: true,
+            controller: _nameController,
+            onChanged: (value) {
+              // Handle value change
+            },
           ),
-        );
-      },
+          SizedBox(height: 16),
+          IntegerFormFieldWidget(
+            column: ColumnDefinitionModel(
+              columnName: 'age',
+              dataType: PostgresDataType.integer,
+              isNullable: true,
+            ),
+            label: 'Age',
+            controller: _ageController,
+            onChanged: (value) {
+              // Handle value change
+            },
+          ),
+          SizedBox(height: 16),
+          BooleanFormFieldWidget(
+            column: ColumnDefinitionModel(
+              columnName: 'is_active',
+              dataType: PostgresDataType.boolean,
+              isNullable: false,
+            ),
+            label: 'Active',
+            isRequired: true,
+            onChanged: (value) {
+              setState(() {
+                _isActive = value ?? false;
+              });
+            },
+          ),
+          SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () {
+              if (_formKey.currentState!.validate()) {
+                // Form is valid, submit
+              }
+            },
+            child: Text('Submit'),
+          ),
+        ],
+      ),
     );
-  }
-
-  // Handle form submission
-  void _handleFormSubmit(Map<String, dynamic> formData) {
-    // Handle the updated data
-    print('Updated data: $formData');
-    // In a real app, you would update the database or perform other actions
   }
 }
 ```
 
-### Step 4: Building the UI with Table View
+## Available Form Widgets
+
+- `TextFormFieldWidget` - For text input
+- `BooleanFormFieldWidget` - For boolean input (checkbox)
+- `DateFormFieldWidget` - For date input
+- `DateTimeFormFieldWidget` - For date and time input
+- `IntegerFormFieldWidget` - For integer input
+- `DecimalFormFieldWidget` - For decimal input
+- `JsonFormFieldWidget` - For JSON input
+- `ArrayFormFieldWidget` - For array input
+- `DropdownFormFieldWidget` - For dropdown selection
+
+## CRUD Table
+
+The package also includes a `CrudTable` component that combines the `DynamicTableView` and `DynamicForm` widgets to provide a complete CRUD experience:
+
+### Basic Usage
 
 ```dart
+import 'package:flutter/material.dart';
+import 'package:postgress_table_form/postgress_table_form.dart';
+
+class MyCrudScreen extends StatefulWidget {
+  @override
+  _MyCrudScreenState createState() => _MyCrudScreenState();
+}
+
+class _MyCrudScreenState extends State<MyCrudScreen> {
+  // Create a key to access the CrudTable state
+  final crudTableKey = GlobalKey<CrudTableState>();
+  
+  // Define your table
+  final tableDefinition = TableDefinitionModel(
+    tableName: 'users',
+    columns: [
+      ColumnDefinitionModel(
+        columnName: 'id',
+        dataType: PostgresDataType.integer,
+        isNullable: false,
+      ),
+      ColumnDefinitionModel(
+        columnName: 'name',
+        dataType: PostgresDataType.text,
+        isNullable: false,
+      ),
+      ColumnDefinitionModel(
+        columnName: 'email',
+        dataType: PostgresDataType.text,
+        isNullable: false,
+      ),
+      ColumnDefinitionModel(
+        columnName: 'age',
+        dataType: PostgresDataType.integer,
+        isNullable: true,
+      ),
+      ColumnDefinitionModel(
+        columnName: 'is_active',
+        dataType: PostgresDataType.boolean,
+        isNullable: false,
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
-    // Convert the table definition from JSON to a model
-    final tableDefinition = TableDefinitionModel.fromList(tableDef);
-
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: Text('User Management')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
-            // Display record count
-            Text(
-              '${tableData.length} records found',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            // Dynamic table view to display data
-            Expanded(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  // This is needed to ensure the table scrolls properly
-                  return false;
-                },
-                child: Stack(
-                  children: [
-                    // DynamicTableView automatically generates a table from your data
-                    DynamicTableView(
-                      tableDefinition: tableDefinition,
-                      data: tableData,
-                      enableRowSelection: true,
-                      showActionsColumn: true,
-                      // Format column headers by replacing underscores with spaces
-                      columnNameMapper: (columnName) {
-                        return columnName.replaceAll('_', ' ');
-                      },
-                      // Add an edit button for each row
-                      actionBuilder: (record) {
-                        return IconButton(
-                          onPressed: () => _handleRecordSelection(record),
-                          icon: const Icon(Icons.edit),
-                        );
-                      },
-                    ),
-                  ],
+            // Page size selector
+            Row(
+              children: [
+                Text('Page Size: '),
+                DropdownButton<int>(
+                  value: 10,
+                  items: [10, 20, 50, 100].map((size) => 
+                    DropdownMenuItem<int>(value: size, child: Text('$size'))
+                  ).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      crudTableKey.currentState?.setPageSize(value);
+                    }
+                  },
                 ),
+                Spacer(),
+                // Refresh button
+                IconButton(
+                  icon: Icon(Icons.refresh),
+                  onPressed: () => crudTableKey.currentState?.refreshData(),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // CrudTable with all CRUD operations
+            Expanded(
+              child: CrudTable(
+                key: crudTableKey,
+                tableDefinition: tableDefinition,
+                getData: (page, pageSize) async {
+                  // In a real app, you would fetch data from a database or API
+                  // with the appropriate pagination parameters
+                  await Future.delayed(Duration(seconds: 1)); // Simulate network delay
+                  
+                  // This is where you would use the page and pageSize parameters
+                  // to fetch the appropriate subset of data
+                  print('Fetching page $page with page size $pageSize');
+                  
+                  // Return only the records for the current page
+                  return [
+                    {'id': 1, 'name': 'John Doe', 'email': 'john@example.com', 'age': 30, 'is_active': true},
+                    {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com', 'age': 25, 'is_active': true},
+                    {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 45, 'is_active': false},
+                  ];
+                },
+                getTotalCount: () async {
+                  // In a real app, you would get the total count from a database or API
+                  await Future.delayed(Duration(milliseconds: 500)); // Simulate network delay
+                  
+                  // Return the total number of records
+                  return 100; // Example: 100 total records
+                },
+                onCreate: (formData) async {
+                  // Create a new record
+                  print('Creating: $formData');
+                  // In a real app, you would send data to a database or API
+                  return true; // Return success status
+                },
+                onUpdate: (formData) async {
+                  // Update an existing record
+                  print('Updating: $formData');
+                  // In a real app, you would send data to a database or API
+                  return true; // Return success status
+                },
+                onDelete: (rowData) async {
+                  // Delete a record
+                  print('Deleting: $rowData');
+                  // In a real app, you would send delete request to a database or API
+                  return true; // Return success status
+                },
+                allowedOperations: {
+                  CrudOperations.create, 
+                  CrudOperations.update, 
+                  CrudOperations.delete
+                },
+                columnNameMapper: {
+                  'id': 'ID',
+                  'name': 'Full Name',
+                  'email': 'Email Address',
+                  'age': 'Age (Years)',
+                  'is_active': 'Active Status'
+                },
+                hiddenTableColumns: ['id'], // Hide ID in the table
+                hiddenFormFields: ['id'], // Hide ID in the form
               ),
             ),
           ],
         ),
       ),
-      // Floating action button to add new records
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            _selectedRecord = null; // Clear selected record for new entry
-          });
-          _showFormDialog({}); // Show empty form for new record
-        },
-        tooltip: 'New Record',
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }
 ```
 
-### Key Components Explained
+### Using the Factory Constructors
 
-1. **TableDefinitionModel**: Converts your PostgreSQL table definition JSON into a model that the package can use to generate forms and tables.
+The `CrudTable` provides convenient factory constructors for common use cases:
 
-2. **DynamicTableView**: A widget that displays your data in a table format with the following features:
-   - Automatically generates columns based on your table definition
-   - Supports row selection
-   - Customizable column headers with `columnNameMapper`
-   - Action buttons for each row with `actionBuilder`
+#### From a List of Data
 
-3. **DynamicForm**: A widget that generates a form based on your table definition with the following features:
-   - Creates appropriate form fields for each column type
-   - Pre-fills form with existing data when editing
-   - Handles form submission with validation
-
-4. **Data Flow**:
-   - Table data is displayed in the `DynamicTableView`
-   - When a user clicks the edit button, the record is passed to `_handleRecordSelection`
-   - A dialog opens with a `DynamicForm` pre-filled with the record data
-   - When the form is submitted, the updated data is passed to `_handleFormSubmit`
-   - In a real application, you would update your database with the new data
-
-### Data Files
-
-For this example to work, you need to create:
-
-1. `data/tableDef.dart` - Contains your table definition from PostgreSQL:
-```dart
-final tableDef = [
-  // Your table definition JSON from PostgreSQL
-  // This would be the result of the SQL query or function shown earlier
-];
-```
-
-2. `data/table_data.dart` - Contains your sample data:
-```dart
-final tableData = [
-  // Sample records matching your table structure
-  {'id': 1, 'name': 'Example 1', ...},
-  {'id': 2, 'name': 'Example 2', ...},
-  // ...
-];
-```
-
-## How It Works
-
-1. **Table Definition Parsing**: The package parses the JSON table definition to understand the structure of your PostgreSQL table.
-
-2. **Form Generation**: Based on the table definition, appropriate form fields are generated:
-   - Text fields for character types (char, varchar, text)
-   - Number fields for numeric types (integer, decimal, etc.)
-   - Toggle switches for boolean types
-   - Date/time pickers for date and time types
-   - Dropdown selectors for enum types
-
-3. **Validation**: Form validation is automatically applied based on:
-   - Nullability constraints (is_nullable)
-   - Data type constraints
-   - Any custom validation rules you provide
-
-4. **Form Submission**: When the form is submitted, the data is validated and returned in a format ready to be used in SQL queries.
-
-## Customization
-
-The form appearance and behavior can be customized:
+If you already have all your data in memory, you can use the `fromList` constructor:
 
 ```dart
-PostgresTableForm(
+CrudTable.fromList(
   tableDefinition: tableDefinition,
-  theme: PostgresFormTheme(
-    // Custom theme options
-  ),
-  fieldBuilders: {
-    // Custom field builders for specific column types
+  data: [
+    {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},
+    {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},
+    {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'},
+  ],
+  onCreate: (formData) async {
+    // Handle create
+    return true;
   },
-  onSubmit: (formData) {
-    // Handle form submission
-  },
+  // ... other parameters
 )
 ```
 
-## Additional information
+This constructor automatically handles pagination for you, slicing the data based on the current page and page size.
 
-For more detailed examples, check the `/example` folder in the package repository.
+#### From a Future
 
-For issues, feature requests, or contributions, please visit the [GitHub repository](https://github.com/yourusername/postgress_table_form).
+If you need to load your table definition asynchronously, you can use the `fromFuture` constructor:
+
+```dart
+CrudTable.fromFuture(
+  tableDefinitionFuture: fetchTableDefinition(), // Returns Future<TableDefinitionModel>
+  getData: (page, pageSize) async {
+    // Fetch data with pagination
+    final result = await api.fetchUsers(page, pageSize);
+    return result.items; // Return the list of records for the current page
+  },
+  getTotalCount: () async {
+    // Get the total count of records
+    final count = await api.getUsersCount();
+    return count;
+  },
+  onCreate: (formData) async {
+    // Handle create
+    return true;
+  },
+  // ... other parameters
+)
+```
+
+This constructor shows a loading indicator while the table definition is being loaded.
+
+### Understanding Pagination
+
+The `CrudTable` component handles pagination automatically. Here's how to implement it correctly:
+
+1. **Page Numbers**: Pages are 1-indexed (the first page is page 1, not page 0)
+
+2. **getData Function**: Your `getData` function receives two parameters:
+   - `page`: The current page number (starting from 1)
+   - `pageSize`: The number of records to display per page
+   
+   This function should return only the records for the requested page.
+
+3. **getTotalCount Function**: For proper pagination with large datasets, provide a `getTotalCount` function:
+   ```dart
+   getTotalCount: () async {
+     // Get the total count of records (e.g., from a database)
+     final result = await database.query('SELECT COUNT(*) FROM users');
+     return result[0]['count'];
+   }
+   ```
+   This allows the component to calculate the correct number of pages without loading all data.
+
+4. **Pagination Controls**: The component automatically displays pagination controls when there are multiple pages
+
+5. **Programmatic Control**: You can control pagination programmatically using the `CrudTableState`:
+   - `setPageSize(int)`: Change the number of records per page
+   - `goToPage(int)`: Navigate to a specific page
+   - `refreshData()`: Reload the current page
+   - `currentPage`: Get the current page number
+   - `pageSize`: Get the current page size
+
+### Example with Real Pagination
+
+Here's an example of implementing real pagination with a database:
+
+```dart
+CrudTable(
+  key: crudTableKey,
+  tableDefinition: tableDefinition,
+  getData: (page, pageSize) async {
+    // Calculate offset for SQL query
+    final offset = (page - 1) * pageSize;
+    
+    // Execute SQL query with LIMIT and OFFSET
+    final result = await database.query(
+      'SELECT * FROM users LIMIT $pageSize OFFSET $offset'
+    );
+    
+    // Return only the records for the current page
+    return result;
+  },
+  getTotalCount: () async {
+    // Execute a separate query to get the total count
+    final countResult = await database.query('SELECT COUNT(*) FROM users');
+    return countResult[0]['count'];
+  },
+  // ... other parameters
+)
+```
+
+### Customizing the CrudTable
+
+The `CrudTable` component offers extensive customization options, including:
+
+- Control over which operations (Create, Update, Delete) are allowed
+- Custom button text and dialog titles
+- Separate field visibility for tables and forms
+- Custom field ordering
+- Form field grouping
+- Custom validation
+- Dropdown option mapping
+- Custom cell rendering
+- Custom styling for headers and cells
+- Tooltips for column headers
+
+## License
+
+MIT

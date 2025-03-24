@@ -22,6 +22,8 @@ TableDefinitionModel _$TableDefinitionModelFromJson(Map<String, dynamic> json) {
 mixin _$TableDefinitionModel {
 // required String tableName,
   List<ColumnDefinitionModel> get columns => throw _privateConstructorUsedError;
+  Map<String, TableDefinitionModel> get joinedTables =>
+      throw _privateConstructorUsedError;
 
   /// Serializes this TableDefinitionModel to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -39,7 +41,9 @@ abstract class $TableDefinitionModelCopyWith<$Res> {
           $Res Function(TableDefinitionModel) then) =
       _$TableDefinitionModelCopyWithImpl<$Res, TableDefinitionModel>;
   @useResult
-  $Res call({List<ColumnDefinitionModel> columns});
+  $Res call(
+      {List<ColumnDefinitionModel> columns,
+      Map<String, TableDefinitionModel> joinedTables});
 }
 
 /// @nodoc
@@ -59,12 +63,17 @@ class _$TableDefinitionModelCopyWithImpl<$Res,
   @override
   $Res call({
     Object? columns = null,
+    Object? joinedTables = null,
   }) {
     return _then(_value.copyWith(
       columns: null == columns
           ? _value.columns
           : columns // ignore: cast_nullable_to_non_nullable
               as List<ColumnDefinitionModel>,
+      joinedTables: null == joinedTables
+          ? _value.joinedTables
+          : joinedTables // ignore: cast_nullable_to_non_nullable
+              as Map<String, TableDefinitionModel>,
     ) as $Val);
   }
 }
@@ -77,7 +86,9 @@ abstract class _$$TableDefinitionModelImplCopyWith<$Res>
       __$$TableDefinitionModelImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({List<ColumnDefinitionModel> columns});
+  $Res call(
+      {List<ColumnDefinitionModel> columns,
+      Map<String, TableDefinitionModel> joinedTables});
 }
 
 /// @nodoc
@@ -94,12 +105,17 @@ class __$$TableDefinitionModelImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? columns = null,
+    Object? joinedTables = null,
   }) {
     return _then(_$TableDefinitionModelImpl(
       columns: null == columns
           ? _value._columns
           : columns // ignore: cast_nullable_to_non_nullable
               as List<ColumnDefinitionModel>,
+      joinedTables: null == joinedTables
+          ? _value._joinedTables
+          : joinedTables // ignore: cast_nullable_to_non_nullable
+              as Map<String, TableDefinitionModel>,
     ));
   }
 }
@@ -108,8 +124,10 @@ class __$$TableDefinitionModelImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$TableDefinitionModelImpl extends _TableDefinitionModel {
   const _$TableDefinitionModelImpl(
-      {required final List<ColumnDefinitionModel> columns})
+      {required final List<ColumnDefinitionModel> columns,
+      final Map<String, TableDefinitionModel> joinedTables = const {}})
       : _columns = columns,
+        _joinedTables = joinedTables,
         super._();
 
   factory _$TableDefinitionModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -125,9 +143,18 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
     return EqualUnmodifiableListView(_columns);
   }
 
+  final Map<String, TableDefinitionModel> _joinedTables;
+  @override
+  @JsonKey()
+  Map<String, TableDefinitionModel> get joinedTables {
+    if (_joinedTables is EqualUnmodifiableMapView) return _joinedTables;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_joinedTables);
+  }
+
   @override
   String toString() {
-    return 'TableDefinitionModel(columns: $columns)';
+    return 'TableDefinitionModel(columns: $columns, joinedTables: $joinedTables)';
   }
 
   @override
@@ -135,13 +162,17 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$TableDefinitionModelImpl &&
-            const DeepCollectionEquality().equals(other._columns, _columns));
+            const DeepCollectionEquality().equals(other._columns, _columns) &&
+            const DeepCollectionEquality()
+                .equals(other._joinedTables, _joinedTables));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, const DeepCollectionEquality().hash(_columns));
+  int get hashCode => Object.hash(
+      runtimeType,
+      const DeepCollectionEquality().hash(_columns),
+      const DeepCollectionEquality().hash(_joinedTables));
 
   /// Create a copy of TableDefinitionModel
   /// with the given fields replaced by the non-null parameter values.
@@ -163,7 +194,8 @@ class _$TableDefinitionModelImpl extends _TableDefinitionModel {
 
 abstract class _TableDefinitionModel extends TableDefinitionModel {
   const factory _TableDefinitionModel(
-          {required final List<ColumnDefinitionModel> columns}) =
+          {required final List<ColumnDefinitionModel> columns,
+          final Map<String, TableDefinitionModel> joinedTables}) =
       _$TableDefinitionModelImpl;
   const _TableDefinitionModel._() : super._();
 
@@ -173,6 +205,8 @@ abstract class _TableDefinitionModel extends TableDefinitionModel {
 // required String tableName,
   @override
   List<ColumnDefinitionModel> get columns;
+  @override
+  Map<String, TableDefinitionModel> get joinedTables;
 
   /// Create a copy of TableDefinitionModel
   /// with the given fields replaced by the non-null parameter values.

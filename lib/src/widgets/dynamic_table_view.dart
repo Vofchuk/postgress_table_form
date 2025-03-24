@@ -371,8 +371,11 @@ class _DynamicTableViewState extends State<DynamicTableView> {
   List<DataColumn> _buildColumns() {
     List<DataColumn> columns = [];
 
+    // Get all columns including joined table columns
+    final allColumns = widget.tableDefinition.getAllColumns();
+
     // Filter out hidden columns
-    final visibleColumns = widget.tableDefinition.columns
+    final visibleColumns = allColumns
         .where((column) => !widget.hiddenColumns.contains(column.columnName))
         .toList();
 
@@ -392,9 +395,7 @@ class _DynamicTableViewState extends State<DynamicTableView> {
         if (bIndex >= 0) return 1;
 
         // If neither column is in the columnOrder, maintain their original order
-        return widget.tableDefinition.columns
-            .indexOf(a)
-            .compareTo(widget.tableDefinition.columns.indexOf(b));
+        return allColumns.indexOf(a).compareTo(allColumns.indexOf(b));
       });
     }
 
@@ -460,6 +461,23 @@ class _DynamicTableViewState extends State<DynamicTableView> {
     );
   }
 
+  /// Gets the value from a nested object using dot notation
+  /// Example: getValue(data, 'users.name') will return data['users']['name']
+  dynamic _getNestedValue(Map<String, dynamic> data, String path) {
+    final parts = path.split('.');
+    dynamic value = data;
+
+    for (final part in parts) {
+      if (value is Map) {
+        value = value[part];
+      } else {
+        return null;
+      }
+    }
+
+    return value;
+  }
+
   /// Builds the data rows for the table
   ///
   /// Creates DataRow objects for each item in the data list, with cells
@@ -475,8 +493,11 @@ class _DynamicTableViewState extends State<DynamicTableView> {
 
       List<DataCell> cells = [];
 
+      // Get all columns including joined table columns
+      final allColumns = widget.tableDefinition.getAllColumns();
+
       // Filter out hidden columns
-      final visibleColumns = widget.tableDefinition.columns
+      final visibleColumns = allColumns
           .where((column) => !widget.hiddenColumns.contains(column.columnName))
           .toList();
 
@@ -496,9 +517,7 @@ class _DynamicTableViewState extends State<DynamicTableView> {
           if (bIndex >= 0) return 1;
 
           // If neither column is in the columnOrder, maintain their original order
-          return widget.tableDefinition.columns
-              .indexOf(a)
-              .compareTo(widget.tableDefinition.columns.indexOf(b));
+          return allColumns.indexOf(a).compareTo(allColumns.indexOf(b));
         });
       }
 
@@ -510,7 +529,7 @@ class _DynamicTableViewState extends State<DynamicTableView> {
 
       // Add data cells
       cells.addAll(visibleColumns.map((column) {
-        final value = rowDataMap[column.columnName];
+        final value = _getNestedValue(rowDataMap, column.columnName);
 
         // Check for enhanced custom cell builder first
         if (widget.advancedCustomCellBuilders != null &&

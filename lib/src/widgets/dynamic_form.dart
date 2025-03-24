@@ -109,6 +109,22 @@ class DynamicForm extends StatefulWidget {
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
+
+  /// Get the current form data without validation
+  static Map<String, dynamic>? getFormData(BuildContext context) {
+    final state = context.findAncestorStateOfType<_DynamicFormState>();
+    return state?._formData;
+  }
+
+  /// Manually submit the form
+  static bool submitForm(BuildContext context) {
+    final state = context.findAncestorStateOfType<_DynamicFormState>();
+    if (state != null) {
+      state._submitForm();
+      return true;
+    }
+    return false;
+  }
 }
 
 class _DynamicFormState extends State<DynamicForm> {
@@ -137,10 +153,38 @@ class _DynamicFormState extends State<DynamicForm> {
     _formData = {};
 
     // Initialize form data with initial values or defaults
-    for (final column in widget.tableDefinition.columns) {
+    for (final column in widget.tableDefinition.getAllColumns()) {
       final columnName = column.columnName;
 
-      // Even if the field is hidden, we still need to initialize its data
+      // Always initialize hidden fields from initialData, even if they're null
+      // This ensures we track all hidden fields for updates
+      if (widget.hiddenFields.contains(columnName)) {
+        if (widget.initialData != null &&
+            widget.initialData!.containsKey(columnName)) {
+          dynamic initialValue = widget.initialData![columnName];
+
+          // Handle empty strings as null for consistency
+          if (initialValue is String && initialValue.isEmpty) {
+            initialValue = null;
+          }
+
+          _formData[columnName] = initialValue;
+        }
+
+        // Create controllers for hidden text fields if needed
+        if (FormFieldUtils.columnNeedsTextController(column)) {
+          final initialValue = _formData[columnName];
+          final controller = TextEditingController(
+            text: FormFieldUtils.formatInitialValueForTextField(
+                initialValue, column.dataType),
+          );
+          _controllers[columnName] = controller;
+        }
+
+        continue;
+      }
+
+      // For visible fields, get the initial value
       dynamic initialValue = widget.initialData?[columnName];
 
       // Handle empty strings as null for consistency
@@ -158,7 +202,7 @@ class _DynamicFormState extends State<DynamicForm> {
         }
       }
 
-      // Create controllers for text fields (even for hidden fields, as they might be shown later)
+      // Create controllers for text fields
       if (FormFieldUtils.columnNeedsTextController(column)) {
         final controller = TextEditingController(
           text: FormFieldUtils.formatInitialValueForTextField(
@@ -183,38 +227,43 @@ class _DynamicFormState extends State<DynamicForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ..._buildFormFields(),
-          // Display form-level validation errors
-          if (_formLevelErrors.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildFormLevelErrors(),
-          ],
-          if (widget.showSubmitButton) ...[
-            const SizedBox(height: 20),
-            Center(
-              child: ElevatedButton(
-                onPressed: _submitForm,
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+    return SizedBox(
+      width: MediaQuery.of(context).size.width < 600
+          ? MediaQuery.of(context).size.width
+          : 600,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ..._buildFormFields(),
+            // Display form-level validation errors
+            if (_formLevelErrors.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildFormLevelErrors(),
+            ],
+            if (widget.showSubmitButton) ...[
+              const SizedBox(height: 20),
+              Center(
+                child: ElevatedButton(
+                  onPressed: _submitForm,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    widget.submitButtonText,
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
-                child: Text(
-                  widget.submitButtonText,
-                  style: const TextStyle(fontSize: 16),
-                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -293,7 +342,7 @@ class _DynamicFormState extends State<DynamicForm> {
   List<Widget> _buildFormFields() {
     // If no groups are defined, build fields normally
     if (widget.fieldGroups.isEmpty) {
-      return _buildUngroupedFields(widget.tableDefinition.columns);
+      return _buildUngroupedFields(widget.tableDefinition.getAllColumns());
     }
 
     // Get all columns that are in groups
@@ -303,7 +352,8 @@ class _DynamicFormState extends State<DynamicForm> {
     }
 
     // Get ungrouped columns
-    final ungroupedColumns = widget.tableDefinition.columns
+    final ungroupedColumns = widget.tableDefinition
+        .getAllColumns()
         .where((column) => !groupedColumnNames.contains(column.columnName))
         .toList();
 
@@ -360,7 +410,7 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget _buildFieldGroup(FieldGroup group) {
     return FieldGroupWidget(
       group: group,
-      tableColumns: widget.tableDefinition.columns,
+      tableColumns: widget.tableDefinition.getAllColumns(),
       hiddenFields: widget.hiddenFields,
       fieldOrder: widget.fieldOrder,
       allFieldsReadonly: widget.allFieldsReadonly,
@@ -420,6 +470,9 @@ class _DynamicFormState extends State<DynamicForm> {
         _formLevelErrors.clear();
       });
 
+      // Ensure all text field values are updated from controllers
+      _updateFormDataFromControllers();
+
       // Then check form-level validations
       bool hasFormLevelErrors = false;
       for (final validation in widget.formValidations) {
@@ -440,12 +493,96 @@ class _DynamicFormState extends State<DynamicForm> {
       }
 
       if (!hasFormLevelErrors) {
+        // Clean form data before submission
+        final Map<String, dynamic> cleanedFormData = _cleanFormData();
+
         // All validations passed, call onSubmit
-        widget.onSubmit(_formData);
+        print('DynamicForm: Submitting form data: $cleanedFormData');
+        widget.onSubmit(cleanedFormData);
       } else {
         // Force a rebuild to show form-level errors
         setState(() {});
       }
     }
+  }
+
+  // Helper method to clean form data before submission
+  Map<String, dynamic> _cleanFormData() {
+    final Map<String, dynamic> cleanedData = {};
+
+    // Process each column in the table definition
+    for (final column in widget.tableDefinition.getAllColumns()) {
+      final columnName = column.columnName;
+
+      // Get the value from form data
+      dynamic value = _formData[columnName];
+
+      // Handle empty strings consistently for all fields
+      if (value is String && value.trim().isEmpty) {
+        value = null;
+      }
+
+      // For hidden fields, include them in the cleaned data
+      if (widget.hiddenFields.contains(columnName)) {
+        // Include the current value from _formData if it exists
+        if (value != null) {
+          cleanedData[columnName] = value;
+        }
+        // Otherwise, include the initial value if it exists
+        else if (widget.initialData != null &&
+            widget.initialData!.containsKey(columnName)) {
+          dynamic initialValue = widget.initialData![columnName];
+          // Also check if the initial value is an empty string
+          if (initialValue is String && initialValue.trim().isEmpty) {
+            initialValue = null;
+          }
+          if (initialValue != null) {
+            cleanedData[columnName] = initialValue;
+          }
+        }
+        continue;
+      }
+
+      // Only include non-null values for visible fields
+      if (value != null) {
+        cleanedData[columnName] = value;
+      }
+    }
+
+    return cleanedData;
+  }
+
+  // Helper method to update form data from controllers
+  void _updateFormDataFromControllers() {
+    _controllers.forEach((columnName, controller) {
+      // Skip readonly fields
+      if ((widget.allFieldsReadonly &&
+              !widget.editableFields.contains(columnName)) ||
+          widget.readonlyFields.contains(columnName)) {
+        return;
+      }
+
+      // Note: We no longer skip hidden fields to ensure their values are updated
+
+      // Find the column definition
+      ColumnDefinitionModel? column;
+      try {
+        column = widget.tableDefinition.getAllColumns().firstWhere(
+              (col) => col.columnName == columnName,
+            );
+      } catch (_) {
+        // Column not found, skip this controller
+        return;
+      }
+
+      // Update form data based on the column type
+      if (controller.text.isEmpty) {
+        _formData[columnName] = null;
+      } else {
+        // Just use the controller text directly
+        // The form field widgets should have already converted the value to the appropriate type
+        _formData[columnName] = controller.text;
+      }
+    });
   }
 }

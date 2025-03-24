@@ -47,6 +47,8 @@ enum PostgresDataType {
   polygon,
   circle,
 
+  array,
+
   // Custom Types
   userDefined;
 
@@ -59,6 +61,7 @@ enum PostgresDataType {
 
     // Map of PostgreSQL type strings to enum values
     final typeMap = {
+      'array': PostgresDataType.array,
       'smallint': PostgresDataType.smallint,
       'integer': PostgresDataType.integer,
       'int': PostgresDataType.integer,

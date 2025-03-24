@@ -40,7 +40,7 @@ class FormFieldFactory {
     required Map<String, Map<String, String>> dropdownOptionMappers,
     required Function(String, dynamic) onFieldValueChanged,
   }) {
-    final isRequired = column.isNullable;
+    final isRequired = column.isNullable == false;
     // Use the columnNameMapper to get a custom display name, or fall back to the column name
     final displayName =
         columnNameMapper[column.columnName] ?? column.columnName;

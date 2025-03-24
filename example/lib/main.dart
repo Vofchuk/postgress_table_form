@@ -86,15 +86,13 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: DynamicForm(
-                      tableDefinition: tableDefinition,
-                      initialData: record,
-                      onSubmit: (formData) {
-                        _handleFormSubmit(formData);
-                        Navigator.of(context).pop();
-                      },
-                    ),
+                  child: DynamicForm(
+                    tableDefinition: tableDefinition,
+                    initialData: record,
+                    onSubmit: (formData) {
+                      _handleFormSubmit(formData);
+                      Navigator.of(context).pop();
+                    },
                   ),
                 ),
               ],

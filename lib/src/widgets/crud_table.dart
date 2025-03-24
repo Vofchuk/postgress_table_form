@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:postgress_table_form/postgress_table_form.dart';
 
@@ -101,6 +103,12 @@ class CrudTable extends StatefulWidget {
   /// Text for the confirm button in the delete confirmation dialog
   final String confirmDeleteButtonText;
 
+  /// Title for the actions column
+  ///
+  /// The text displayed in the header of the actions column.
+  /// Default is 'Actions'
+  final String actionsColumnTitle;
+
   /// Map of column names to custom display names
   ///
   /// This allows customizing how column names are displayed in both
@@ -171,10 +179,10 @@ class CrudTable extends StatefulWidget {
   final double? columnSpacing;
 
   /// Whether to show a horizontal scrollbar for the table
-  final bool showHorizontalScrollbar;
+  // final bool showHorizontalScrollbar;
 
-  /// Whether to show a vertical scrollbar for the table
-  final bool showVerticalScrollbar;
+  // /// Whether to show a vertical scrollbar for the table
+  // final bool showVerticalScrollbar;
 
   /// Custom cell builders for specific columns in the table
   final Map<String, Widget Function(dynamic value)>? customCellBuilders;
@@ -205,6 +213,21 @@ class CrudTable extends StatefulWidget {
   /// crudTableKey.currentState?.refreshData();
   /// ```
   final GlobalKey<CrudTableState>? tableKey;
+
+  /// Additional action builder for custom action buttons
+  ///
+  /// This function receives the row data as a Map and should return a Widget
+  /// that will be displayed alongside the default edit and delete buttons.
+  ///
+  /// Example:
+  /// ```dart
+  /// additionalActionBuilder: (rowData) => IconButton(
+  ///   icon: const Icon(Icons.visibility, color: Colors.green),
+  ///   tooltip: 'View Details',
+  ///   onPressed: () => showDetails(rowData),
+  /// ),
+  /// ```
+  final ActionBuilder? additionalActionBuilder;
 
   /// Available options for page size in the dropdown
   ///
@@ -244,6 +267,7 @@ class CrudTable extends StatefulWidget {
     this.editButtonText = 'Edit',
     this.cancelButtonText = 'Cancel',
     this.confirmDeleteButtonText = 'Delete',
+    this.actionsColumnTitle = 'Actions',
     this.columnNameMapper = const {},
     this.helpTexts = const {},
     this.hintTexts = const {},
@@ -265,12 +289,13 @@ class CrudTable extends StatefulWidget {
     this.showDataTypeTooltips = true,
     this.rowHeight,
     this.columnSpacing,
-    this.showHorizontalScrollbar = true,
-    this.showVerticalScrollbar = true,
+    // this.showHorizontalScrollbar = true,
+    // this.showVerticalScrollbar = true,
     this.customCellBuilders,
     this.advancedCustomCellBuilders,
     this.tooltipMapper,
     this.tableTheme,
+    this.additionalActionBuilder,
     this.pageSizeOptions = const [5, 10, 25, 50, 100],
     this.initialPageSize = 10,
   });
@@ -316,6 +341,7 @@ class CrudTable extends StatefulWidget {
     String editButtonText = 'Edit',
     String cancelButtonText = 'Cancel',
     String confirmDeleteButtonText = 'Delete',
+    String actionsColumnTitle = 'Actions',
     Map<String, String> columnNameMapper = const {},
     Map<String, String> helpTexts = const {},
     Map<String, String> hintTexts = const {},
@@ -344,6 +370,7 @@ class CrudTable extends StatefulWidget {
     TooltipMapper? tooltipMapper,
     DataTableThemeData? tableTheme,
     GlobalKey<CrudTableState>? tableKey,
+    ActionBuilder? additionalActionBuilder,
     List<int> pageSizeOptions = const [5, 10, 25, 50, 100],
     int initialPageSize = 10,
   }) {
@@ -385,6 +412,7 @@ class CrudTable extends StatefulWidget {
           editButtonText: editButtonText,
           cancelButtonText: cancelButtonText,
           confirmDeleteButtonText: confirmDeleteButtonText,
+          actionsColumnTitle: actionsColumnTitle,
           columnNameMapper: columnNameMapper,
           helpTexts: helpTexts,
           hintTexts: hintTexts,
@@ -406,12 +434,13 @@ class CrudTable extends StatefulWidget {
           showDataTypeTooltips: showDataTypeTooltips,
           rowHeight: rowHeight,
           columnSpacing: columnSpacing,
-          showHorizontalScrollbar: showHorizontalScrollbar,
-          showVerticalScrollbar: showVerticalScrollbar,
+          // showHorizontalScrollbar: showHorizontalScrollbar,
+          // showVerticalScrollbar: showVerticalScrollbar,
           customCellBuilders: customCellBuilders,
           advancedCustomCellBuilders: advancedCustomCellBuilders,
           tooltipMapper: tooltipMapper,
           tableTheme: tableTheme,
+          additionalActionBuilder: additionalActionBuilder,
           pageSizeOptions: pageSizeOptions,
           initialPageSize: initialPageSize,
         );
@@ -455,6 +484,7 @@ class CrudTable extends StatefulWidget {
     String editButtonText = 'Edit',
     String cancelButtonText = 'Cancel',
     String confirmDeleteButtonText = 'Delete',
+    String actionsColumnTitle = 'Actions',
     Map<String, String> columnNameMapper = const {},
     Map<String, String> helpTexts = const {},
     Map<String, String> hintTexts = const {},
@@ -483,6 +513,7 @@ class CrudTable extends StatefulWidget {
     TooltipMapper? tooltipMapper,
     DataTableThemeData? tableTheme,
     GlobalKey<CrudTableState>? tableKey,
+    ActionBuilder? additionalActionBuilder,
     List<int> pageSizeOptions = const [5, 10, 25, 50, 100],
     int initialPageSize = 10,
   }) {
@@ -520,6 +551,7 @@ class CrudTable extends StatefulWidget {
       editButtonText: editButtonText,
       cancelButtonText: cancelButtonText,
       confirmDeleteButtonText: confirmDeleteButtonText,
+      actionsColumnTitle: actionsColumnTitle,
       columnNameMapper: columnNameMapper,
       helpTexts: helpTexts,
       hintTexts: hintTexts,
@@ -541,12 +573,13 @@ class CrudTable extends StatefulWidget {
       showDataTypeTooltips: showDataTypeTooltips,
       rowHeight: rowHeight,
       columnSpacing: columnSpacing,
-      showHorizontalScrollbar: showHorizontalScrollbar,
-      showVerticalScrollbar: showVerticalScrollbar,
+      // showHorizontalScrollbar: showHorizontalScrollbar,
+      // showVerticalScrollbar: showVerticalScrollbar,
       customCellBuilders: customCellBuilders,
       advancedCustomCellBuilders: advancedCustomCellBuilders,
       tooltipMapper: tooltipMapper,
       tableTheme: tableTheme,
+      additionalActionBuilder: additionalActionBuilder,
       pageSizeOptions: pageSizeOptions,
       initialPageSize: initialPageSize,
     );
@@ -565,6 +598,10 @@ class CrudTableState extends State<CrudTable> {
 
   // Total count of records (used for pagination)
   int _totalCount = 0;
+
+  // Form data
+  Map<String, dynamic> _createFormData = {};
+  Map<String, dynamic> _updateFormData = {};
 
   @override
   void initState() {
@@ -660,34 +697,32 @@ class CrudTableState extends State<CrudTable> {
             padding: const EdgeInsets.only(bottom: 16.0),
             child: _buildCreateButton(),
           ),
-        Expanded(
-          child: FutureBuilder<DynamicTableData>(
-            future: _dataFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    'Error loading data: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                );
-              } else if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
-                return const Center(
-                  child: Text('No data available'),
-                );
-              }
-
-              return Column(
-                children: [
-                  Expanded(child: _buildTable(snapshot.data!)),
-                  if (snapshot.data!.totalPages > 1)
-                    _buildPagination(snapshot.data!),
-                ],
+        FutureBuilder<DynamicTableData>(
+          future: _dataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Error loading data: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
               );
-            },
-          ),
+            } else if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
+              return const Center(
+                child: Text('No data available'),
+              );
+            }
+
+            return Column(
+              children: [
+                _buildTable(snapshot.data!),
+                if (snapshot.data!.totalPages > 1)
+                  _buildPagination(snapshot.data!),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -713,8 +748,10 @@ class CrudTableState extends State<CrudTable> {
       data: data.data,
       showActionsColumn:
           widget.allowedOperations.contains(CrudOperations.update) ||
-              widget.allowedOperations.contains(CrudOperations.delete),
+              widget.allowedOperations.contains(CrudOperations.delete) ||
+              widget.additionalActionBuilder != null,
       actionBuilder: (rowData) => _buildActionButtons(rowData),
+      actionsColumnTitle: widget.actionsColumnTitle,
       hiddenColumns: widget.hiddenTableColumns,
       columnOrder: widget.tableColumnOrder,
       columnNameMapper: widget.columnNameMapper != null
@@ -730,8 +767,6 @@ class CrudTableState extends State<CrudTable> {
       dropdownOptionMappers: widget.dropdownOptionMappers,
       customCellBuilders: widget.customCellBuilders,
       advancedCustomCellBuilders: widget.advancedCustomCellBuilders,
-      showHorizontalScrollbar: widget.showHorizontalScrollbar,
-      showVerticalScrollbar: widget.showVerticalScrollbar,
       tableTheme: widget.tableTheme,
     );
   }
@@ -752,6 +787,9 @@ class CrudTableState extends State<CrudTable> {
             tooltip: widget.deleteButtonText,
             onPressed: () => _confirmDelete(rowData),
           ),
+        // Add custom action button if provided
+        if (widget.additionalActionBuilder != null)
+          widget.additionalActionBuilder!(rowData),
       ],
     );
   }
@@ -893,75 +931,75 @@ class CrudTableState extends State<CrudTable> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final screenSize = MediaQuery.of(context).size;
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.createFormTitle,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: screenSize.height * 0.8,
+              maxWidth: min(screenSize.width * 0.8, 600),
+            ),
+            child: IntrinsicHeight(
+              child: IntrinsicWidth(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.createFormTitle,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: DynamicForm(
-                      key: _createFormKey,
-                      tableDefinition: widget.tableDefinition,
-                      hiddenFields: widget.hiddenFormFields,
-                      fieldOrder: widget.formFieldOrder,
-                      readonlyFields: widget.readonlyFields,
-                      allFieldsReadonly: widget.allFieldsReadonly,
-                      editableFields: widget.editableFields,
-                      columnNameMapper: widget.columnNameMapper,
-                      helpTexts: widget.helpTexts,
-                      hintTexts: widget.hintTexts,
-                      customValidators: widget.customValidators,
-                      formValidations: widget.formValidations,
-                      fieldGroups: widget.fieldGroups,
-                      ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
-                      dropdownOptionMappers: widget.dropdownOptionMappers,
-                      showSubmitButton: false,
-                      onSubmit: (formData) {
-                        _createFormData = formData;
-                      },
-                    ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: DynamicForm(
+                            tableDefinition: widget.tableDefinition,
+                            hiddenFields: widget.hiddenFormFields,
+                            fieldOrder: widget.formFieldOrder,
+                            readonlyFields: widget.readonlyFields,
+                            allFieldsReadonly: widget.allFieldsReadonly,
+                            editableFields: widget.editableFields,
+                            columnNameMapper: widget.columnNameMapper,
+                            helpTexts: widget.helpTexts,
+                            hintTexts: widget.hintTexts,
+                            customValidators: widget.customValidators,
+                            formValidations: widget.formValidations,
+                            fieldGroups: widget.fieldGroups,
+                            ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
+                            dropdownOptionMappers: widget.dropdownOptionMappers,
+                            showSubmitButton: true,
+                            onSubmit: (formData) {
+                              print('Form submitted with data: $formData');
+                              _createFormData =
+                                  Map<String, dynamic>.from(formData);
+                              _handleCreateSubmitDirect(context);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(widget.cancelButtonText),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleCreateSubmit(context),
-                      child: Text(widget.createSubmitButtonText),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -969,106 +1007,165 @@ class CrudTableState extends State<CrudTable> {
     );
   }
 
-  // Form key and data for the create form
-  final GlobalKey<FormState> _createFormKey = GlobalKey<FormState>();
-  Map<String, dynamic> _createFormData = {};
+  // Direct submission method that doesn't rely on form validation
+  void _handleCreateSubmitDirect(BuildContext context) async {
+    print('Direct create submission with data: $_createFormData');
 
-  // Form key and data for the update form
-  final GlobalKey<FormState> _updateFormKey = GlobalKey<FormState>();
-  Map<String, dynamic> _updateFormData = {};
+    // Check if onCreate callback is provided
+    if (widget.onCreate != null) {
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return const Dialog(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 20),
+                    Text("Creating record..."),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
 
-  void _handleCreateSubmit(BuildContext context) async {
-    if (_createFormKey.currentState?.validate() ?? false) {
-      _createFormKey.currentState?.save();
-
-      if (widget.onCreate != null) {
+        // Call the onCreate callback with the form data
         final success = await widget.onCreate!(_createFormData);
+
+        // Close the loading dialog
+        if (mounted) Navigator.of(context).pop();
+
         if (success) {
+          // If creation was successful, close the form dialog and refresh the data
           if (mounted) {
             Navigator.pop(context);
             _refreshData();
+
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Record created successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Handle unsuccessful creation
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to create record'),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
         }
+      } catch (e) {
+        // Close the loading dialog if it's open
+        if (mounted) Navigator.of(context).pop();
+
+        // Handle exceptions during creation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating record: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+    } else {
+      // If no onCreate callback is provided, just close the dialog
+      Navigator.pop(context);
     }
   }
 
   void _showUpdateForm(Map<String, dynamic> rowData) {
+    // Initialize update form data with a copy of the row data
     _updateFormData = Map<String, dynamic>.from(rowData);
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final screenSize = MediaQuery.of(context).size;
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.updateFormTitle,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: screenSize.height * 0.8,
+              maxWidth: min(screenSize.width * 0.8,
+                  600), // Maximum width of 600 or 80% of screen width
+            ),
+            child: IntrinsicHeight(
+              child: IntrinsicWidth(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.updateFormTitle,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: DynamicForm(
-                      key: _updateFormKey,
-                      tableDefinition: widget.tableDefinition,
-                      initialData: _updateFormData,
-                      hiddenFields: widget.hiddenFormFields,
-                      fieldOrder: widget.formFieldOrder,
-                      readonlyFields: widget.readonlyFields,
-                      allFieldsReadonly: widget.allFieldsReadonly,
-                      editableFields: widget.editableFields,
-                      columnNameMapper: widget.columnNameMapper,
-                      helpTexts: widget.helpTexts,
-                      hintTexts: widget.hintTexts,
-                      customValidators: widget.customValidators,
-                      formValidations: widget.formValidations,
-                      fieldGroups: widget.fieldGroups,
-                      ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
-                      dropdownOptionMappers: widget.dropdownOptionMappers,
-                      showSubmitButton: false,
-                      onSubmit: (formData) {
-                        _updateFormData = formData;
-                      },
-                    ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: DynamicForm(
+                            tableDefinition: widget.tableDefinition,
+                            initialData: _updateFormData,
+                            hiddenFields: widget.hiddenFormFields,
+                            fieldOrder: widget.formFieldOrder,
+                            readonlyFields: widget.readonlyFields,
+                            allFieldsReadonly: widget.allFieldsReadonly,
+                            editableFields: widget.editableFields,
+                            columnNameMapper: widget.columnNameMapper,
+                            helpTexts: widget.helpTexts,
+                            hintTexts: widget.hintTexts,
+                            customValidators: widget.customValidators,
+                            formValidations: widget.formValidations,
+                            fieldGroups: widget.fieldGroups,
+                            ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
+                            dropdownOptionMappers: widget.dropdownOptionMappers,
+                            showSubmitButton: true,
+                            onSubmit: (formData) {
+                              print(
+                                  'Update form submitted with data: $formData');
+                              _updateFormData =
+                                  Map<String, dynamic>.from(formData);
+                              // Handle the submission
+                              _handleUpdateSubmitDirect(context);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(widget.cancelButtonText),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleUpdateSubmit(context),
-                      child: Text(widget.updateSubmitButtonText),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -1076,19 +1173,82 @@ class CrudTableState extends State<CrudTable> {
     );
   }
 
-  void _handleUpdateSubmit(BuildContext context) async {
-    if (_updateFormKey.currentState?.validate() ?? false) {
-      _updateFormKey.currentState?.save();
+  // Direct submission method that doesn't rely on form validation
+  void _handleUpdateSubmitDirect(BuildContext context) async {
+    print('Direct update submission with data: $_updateFormData');
 
-      if (widget.onUpdate != null) {
+    // Check if onUpdate callback is provided
+    if (widget.onUpdate != null) {
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return const Dialog(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 20),
+                    Text("Updating record..."),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+
+        // Call the onUpdate callback with the form data
         final success = await widget.onUpdate!(_updateFormData);
+
+        // Close the loading dialog
+        if (mounted) Navigator.of(context).pop();
+
         if (success) {
+          // If update was successful, close the form dialog and refresh the data
           if (mounted) {
             Navigator.pop(context);
             _refreshData();
+
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Record updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Handle unsuccessful update
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to update record'),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
         }
+      } catch (e) {
+        // Close the loading dialog if it's open
+        if (mounted) Navigator.of(context).pop();
+
+        // Handle exceptions during update
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error updating record: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+    } else {
+      // If no onUpdate callback is provided, just close the dialog
+      Navigator.pop(context);
     }
   }
 

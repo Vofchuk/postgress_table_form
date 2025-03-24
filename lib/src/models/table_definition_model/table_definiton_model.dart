@@ -9,6 +9,7 @@ class TableDefinitionModel with _$TableDefinitionModel {
   const factory TableDefinitionModel({
     // required String tableName,
     required List<ColumnDefinitionModel> columns,
+    @Default({}) Map<String, TableDefinitionModel> joinedTables,
   }) = _TableDefinitionModel;
 
   const TableDefinitionModel._();
@@ -20,6 +21,31 @@ class TableDefinitionModel with _$TableDefinitionModel {
       TableDefinitionModel.fromJson({
         'columns': list,
       });
+
+  /// Adds a joined table definition
+  TableDefinitionModel addJoinedTable(
+      String key, TableDefinitionModel joinedTable) {
+    final updatedJoinedTables =
+        Map<String, TableDefinitionModel>.from(joinedTables);
+    updatedJoinedTables[key] = joinedTable;
+    return copyWith(joinedTables: updatedJoinedTables);
+  }
+
+  /// Gets all columns including joined table columns with prefixed names
+  List<ColumnDefinitionModel> getAllColumns() {
+    final allColumns = List<ColumnDefinitionModel>.from(columns);
+
+    joinedTables.forEach((prefix, tableDefinition) {
+      final joinedColumns = tableDefinition.columns.map((column) {
+        return column.copyWith(
+          columnName: '$prefix.${column.columnName}',
+        );
+      });
+      allColumns.addAll(joinedColumns);
+    });
+
+    return allColumns;
+  }
 
   // static TableDefinitionModel fromJsonList(
   //     String tableName, List<dynamic> jsonList) {

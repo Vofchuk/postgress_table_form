@@ -16,6 +16,7 @@ class DateFormFieldWidget extends StatelessWidget {
   final String? formLevelErrorMessage;
   final TextEditingController controller;
   final Function(dynamic) onChanged;
+  final bool allTextCapitalized;
 
   const DateFormFieldWidget({
     super.key,
@@ -31,6 +32,7 @@ class DateFormFieldWidget extends StatelessWidget {
     this.formLevelErrorMessage,
     required this.controller,
     required this.onChanged,
+    this.allTextCapitalized = false,
   });
 
   @override

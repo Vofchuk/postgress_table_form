@@ -19,6 +19,7 @@ class UngroupedFieldsWidget extends StatelessWidget {
   final Map<String, TextEditingController> controllers;
   final Map<String, Map<String, String>> dropdownOptionMappers;
   final Function(String, dynamic) onFieldValueChanged;
+  final bool allTextCapitalized;
 
   const UngroupedFieldsWidget({
     super.key,
@@ -37,6 +38,7 @@ class UngroupedFieldsWidget extends StatelessWidget {
     required this.controllers,
     required this.dropdownOptionMappers,
     required this.onFieldValueChanged,
+    this.allTextCapitalized = false,
   });
 
   @override
@@ -75,6 +77,7 @@ class UngroupedFieldsWidget extends StatelessWidget {
             controllers: controllers,
             dropdownOptionMappers: dropdownOptionMappers,
             onFieldValueChanged: onFieldValueChanged,
+            allTextCapitalized: allTextCapitalized,
           ),
         ),
       );

@@ -36,6 +36,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   Map<String, dynamic>? _selectedRecord;
   final int _selectedIndex = -1;
+  bool _allTextCapitalized = false;
 
   @override
   void initState() {
@@ -59,46 +60,67 @@ class _MyHomePageState extends State<MyHomePage> {
   void _showFormDialog(Map<String, dynamic> record) {
     final tableDefinition = TableDefinitionModel.fromList(tableDef);
 
+    bool capitalizeText = _allTextCapitalized;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.8,
-            height: MediaQuery.of(context).size.height * 0.8,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Edit Record',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: DynamicForm(
-                    tableDefinition: tableDefinition,
-                    initialData: record,
-                    onSubmit: (formData) {
-                      _handleFormSubmit(formData);
-                      Navigator.of(context).pop();
-                    },
+        return StatefulBuilder(builder: (context, setState) {
+          return Dialog(
+            insetPadding: const EdgeInsets.all(16),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.8,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Edit Record',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  Row(
+                    children: [
+                      const Text('Capitalize all text:'),
+                      Switch(
+                        value: capitalizeText,
+                        onChanged: (value) {
+                          setState(() {
+                            capitalizeText = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: DynamicForm(
+                      tableDefinition: tableDefinition,
+                      initialData: record,
+                      allTextCapitalized: capitalizeText,
+                      onSubmit: (formData) {
+                        _handleFormSubmit(formData);
+                        this.setState(() {
+                          _allTextCapitalized = capitalizeText;
+                        });
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
+          );
+        });
       },
     );
   }

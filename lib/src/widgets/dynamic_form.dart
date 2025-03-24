@@ -9,12 +9,25 @@ import 'package:postgress_table_form/src/widgets/form_widgets/ungrouped_fields_w
 
 /// Represents a group of fields in the form
 
+/// Enum defining the position of the save button in the form
+enum SaveButtonPosition {
+  /// Save button appears at the top of the form
+  top,
+
+  /// Save button appears at the bottom of the form
+  bottom,
+
+  /// Save button appears at both top and bottom of the form
+  both
+}
+
 class DynamicForm extends StatefulWidget {
   final TableDefinitionModel tableDefinition;
   final Map<String, dynamic>? initialData;
   final Function(Map<String, dynamic> formData) onSubmit;
   final bool showSubmitButton;
   final String submitButtonText;
+  final SaveButtonPosition saveButtonPosition;
 
   /// List of column names that should be readonly
   final List<String> readonlyFields;
@@ -64,6 +77,9 @@ class DynamicForm extends StatefulWidget {
   /// This allows users to customize the labels shown for each field
   final Map<String, String> columnNameMapper;
 
+  /// If true, all text input will be automatically converted to uppercase
+  final bool allTextCapitalized;
+
   /// Map of column names to a map of dropdown option values to display names
   /// This allows users to customize how dropdown options are displayed
   /// The key is the column name, and the value is a map of option values to display names
@@ -91,6 +107,7 @@ class DynamicForm extends StatefulWidget {
     required this.onSubmit,
     this.showSubmitButton = true,
     this.submitButtonText = 'Submit',
+    this.saveButtonPosition = SaveButtonPosition.top,
     this.readonlyFields = const [],
     this.allFieldsReadonly = false,
     this.editableFields = const [],
@@ -103,6 +120,7 @@ class DynamicForm extends StatefulWidget {
     this.hintTexts = const {},
     this.formValidations = const [],
     this.columnNameMapper = const {},
+    this.allTextCapitalized = false,
     this.dropdownOptionMappers = const {},
     this.validationErrorsHeader = 'Please fix the following errors:',
   });
@@ -237,33 +255,47 @@ class _DynamicFormState extends State<DynamicForm> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (widget.showSubmitButton &&
+                (widget.saveButtonPosition == SaveButtonPosition.top ||
+                    widget.saveButtonPosition == SaveButtonPosition.both)) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: _buildSubmitButton(),
+              ),
+              const SizedBox(height: 20),
+            ],
             ..._buildFormFields(),
             // Display form-level validation errors
             if (_formLevelErrors.isNotEmpty) ...[
               const SizedBox(height: 16),
               _buildFormLevelErrors(),
             ],
-            if (widget.showSubmitButton) ...[
+            if (widget.showSubmitButton &&
+                (widget.saveButtonPosition == SaveButtonPosition.bottom ||
+                    widget.saveButtonPosition == SaveButtonPosition.both)) ...[
               const SizedBox(height: 20),
               Center(
-                child: ElevatedButton(
-                  onPressed: _submitForm,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    widget.submitButtonText,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
+                child: _buildSubmitButton(),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return ElevatedButton(
+      onPressed: _submitForm,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Text(
+        widget.submitButtonText,
+        style: const TextStyle(fontSize: 16),
       ),
     );
   }
@@ -433,6 +465,7 @@ class _DynamicFormState extends State<DynamicForm> {
       onFieldValueChanged: (columnName, value) {
         _formData[columnName] = value;
       },
+      allTextCapitalized: widget.allTextCapitalized,
     );
   }
 
@@ -456,6 +489,7 @@ class _DynamicFormState extends State<DynamicForm> {
         onFieldValueChanged: (columnName, value) {
           _formData[columnName] = value;
         },
+        allTextCapitalized: widget.allTextCapitalized,
       ),
     ];
   }

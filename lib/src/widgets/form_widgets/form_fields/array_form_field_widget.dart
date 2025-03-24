@@ -18,6 +18,7 @@ class ArrayFormFieldWidget extends StatefulWidget {
   final Function(List<dynamic>) onChanged;
   final dynamic initialValue;
   final Map<String, String>? optionLabelMapper;
+  final bool allTextCapitalized;
 
   const ArrayFormFieldWidget({
     super.key,
@@ -35,6 +36,7 @@ class ArrayFormFieldWidget extends StatefulWidget {
     required this.onChanged,
     this.initialValue,
     this.optionLabelMapper,
+    this.allTextCapitalized = false,
   });
 
   @override

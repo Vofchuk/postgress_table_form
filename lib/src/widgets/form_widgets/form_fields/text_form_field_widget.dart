@@ -15,6 +15,7 @@ class TextFormFieldWidget extends StatelessWidget {
   final String? formLevelErrorMessage;
   final TextEditingController controller;
   final Function(dynamic) onChanged;
+  final bool allTextCapitalized;
 
   const TextFormFieldWidget({
     super.key,
@@ -30,6 +31,7 @@ class TextFormFieldWidget extends StatelessWidget {
     this.formLevelErrorMessage,
     required this.controller,
     required this.onChanged,
+    this.allTextCapitalized = false,
   });
 
   @override
@@ -77,6 +79,9 @@ class TextFormFieldWidget extends StatelessWidget {
             color: isReadonly ? Colors.grey.shade700 : Colors.black87,
             fontSize: 15,
           ),
+          textCapitalization: allTextCapitalized
+              ? TextCapitalization.characters
+              : TextCapitalization.none,
           validator: (value) {
             // Required field validation - skip for readonly fields
             if (FormFieldUtils.shouldValidateAsRequired(
@@ -103,7 +108,23 @@ class TextFormFieldWidget extends StatelessWidget {
           },
           onChanged: (value) {
             if (!isReadonly) {
-              onChanged(value);
+              // Convert to uppercase if allTextCapitalized is true
+              final processedValue =
+                  allTextCapitalized ? value.toUpperCase() : value;
+              // If the value changes due to uppercase conversion, update the controller
+              if (processedValue != value) {
+                // Remember the current cursor position
+                final cursorPos = controller.selection.start;
+                // Update the controller text
+                controller.text = processedValue;
+                // Restore cursor position, adjusting for any text length changes
+                if (cursorPos <= processedValue.length) {
+                  controller.selection = TextSelection.fromPosition(
+                    TextPosition(offset: cursorPos),
+                  );
+                }
+              }
+              onChanged(processedValue);
             }
           },
         ),

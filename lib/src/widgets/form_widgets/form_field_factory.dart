@@ -39,6 +39,7 @@ class FormFieldFactory {
     required Map<String, TextEditingController> controllers,
     required Map<String, Map<String, String>> dropdownOptionMappers,
     required Function(String, dynamic) onFieldValueChanged,
+    bool allTextCapitalized = false,
   }) {
     final isRequired = column.isNullable == false;
     // Use the columnNameMapper to get a custom display name, or fall back to the column name
@@ -88,6 +89,7 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
+          allTextCapitalized: allTextCapitalized,
         );
 
       case PostgresDataType.timestamp:
@@ -177,6 +179,7 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
+          allTextCapitalized: allTextCapitalized,
         );
 
       case PostgresDataType.integerArray:
@@ -201,6 +204,7 @@ class FormFieldFactory {
             onFieldValueChanged(column.columnName, value);
           },
           optionLabelMapper: dropdownOptionMappers[column.columnName],
+          allTextCapitalized: allTextCapitalized,
         );
 
       case PostgresDataType.userDefined:
@@ -244,6 +248,7 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
+          allTextCapitalized: allTextCapitalized,
         );
       case PostgresDataType.array:
         return ArrayFormFieldWidget(
@@ -251,8 +256,11 @@ class FormFieldFactory {
           label: label,
           isReadonly: isReadonly,
           isRequired: isRequired,
+          customValidator: customValidators[column.columnName],
+          helpText: helpTexts[column.columnName],
           displayName: displayName,
-          hintText: hintTexts[column.columnName] ?? 'Enter $displayName',
+          hintText:
+              hintTexts[column.columnName] ?? 'Enter comma-separated values',
           hasFormLevelError: hasFormLevelError,
           formLevelErrorMessage: hasFormLevelError
               ? getFormLevelErrorForField(column.columnName, formLevelErrors)
@@ -261,9 +269,8 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
-          customValidator: customValidators[column.columnName],
-          helpText: helpTexts[column.columnName],
           optionLabelMapper: dropdownOptionMappers[column.columnName],
+          allTextCapitalized: allTextCapitalized,
         );
       default:
         return TextFormFieldWidget(
@@ -283,6 +290,7 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
+          allTextCapitalized: allTextCapitalized,
         );
     }
   }

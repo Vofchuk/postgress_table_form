@@ -17,6 +17,7 @@ class JsonFormFieldWidget extends StatelessWidget {
   final String? formLevelErrorMessage;
   final TextEditingController controller;
   final Function(dynamic) onChanged;
+  final bool allTextCapitalized;
 
   const JsonFormFieldWidget({
     super.key,
@@ -32,6 +33,7 @@ class JsonFormFieldWidget extends StatelessWidget {
     this.formLevelErrorMessage,
     required this.controller,
     required this.onChanged,
+    this.allTextCapitalized = false,
   });
 
   @override

@@ -23,6 +23,7 @@ class FieldGroupWidget extends StatelessWidget {
   final bool expanded;
   final Function(bool) onExpansionChanged;
   final Function(String, dynamic) onFieldValueChanged;
+  final bool allTextCapitalized;
 
   const FieldGroupWidget({
     super.key,
@@ -44,6 +45,7 @@ class FieldGroupWidget extends StatelessWidget {
     required this.expanded,
     required this.onExpansionChanged,
     required this.onFieldValueChanged,
+    this.allTextCapitalized = false,
   });
 
   @override
@@ -145,6 +147,7 @@ class FieldGroupWidget extends StatelessWidget {
                       controllers: controllers,
                       dropdownOptionMappers: dropdownOptionMappers,
                       onFieldValueChanged: onFieldValueChanged,
+                      allTextCapitalized: allTextCapitalized,
                     ),
                   );
                 }).toList(),

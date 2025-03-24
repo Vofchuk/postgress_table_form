@@ -306,6 +306,26 @@ class CrudTable extends StatefulWidget {
   /// Default is 10
   final int initialPageSize;
 
+  /// Custom widget to display when there is no data
+  ///
+  /// When provided, this widget will be displayed instead of the default "No data available" text
+  /// when the table has no records to display.
+  final Widget? noDataWidget;
+
+  /// Whether to show the refresh button
+  ///
+  /// When true, a refresh button will be displayed that allows users to manually
+  /// refresh the table data.
+  /// Default is true
+  final bool showRefreshButton;
+
+  /// Whether to automatically convert all text input to uppercase
+  ///
+  /// When true, all text input in forms will be automatically converted to uppercase
+  /// while the user is typing.
+  /// Default is true
+  final bool allTextCapitalized;
+
   /// Constructs a CRUD table with the specified parameters
   const CrudTable({
     super.key,
@@ -371,6 +391,9 @@ class CrudTable extends StatefulWidget {
     this.searchableColumns = const [],
     this.columnSearchHintText = 'Select column',
     this.searchAllText = 'Search All',
+    this.noDataWidget,
+    this.showRefreshButton = true,
+    this.allTextCapitalized = true,
   });
 
   @override
@@ -459,6 +482,9 @@ class CrudTable extends StatefulWidget {
     List<String> searchableColumns = const [],
     String columnSearchHintText = 'Select column',
     String searchAllText = 'Search All',
+    Widget? noDataWidget,
+    bool showRefreshButton = true,
+    bool allTextCapitalized = true,
   }) {
     return FutureBuilder<TableDefinitionModel>(
       future: tableDefinitionFuture,
@@ -537,6 +563,9 @@ class CrudTable extends StatefulWidget {
           searchableColumns: searchableColumns,
           columnSearchHintText: columnSearchHintText,
           searchAllText: searchAllText,
+          noDataWidget: noDataWidget,
+          showRefreshButton: showRefreshButton,
+          allTextCapitalized: allTextCapitalized,
         );
       },
     );
@@ -619,6 +648,9 @@ class CrudTable extends StatefulWidget {
     List<String> searchableColumns = const [],
     String columnSearchHintText = 'Select column',
     String searchAllText = 'Search All',
+    Widget? noDataWidget,
+    bool showRefreshButton = true,
+    bool allTextCapitalized = true,
   }) {
     // Keep track of the current search text for total count calculation
     String currentSearchText = '';
@@ -729,6 +761,9 @@ class CrudTable extends StatefulWidget {
       searchableColumns: searchableColumns,
       columnSearchHintText: columnSearchHintText,
       searchAllText: searchAllText,
+      noDataWidget: noDataWidget,
+      showRefreshButton: showRefreshButton,
+      allTextCapitalized: allTextCapitalized,
     );
   }
 }
@@ -911,42 +946,98 @@ class CrudTableState extends State<CrudTable> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Create button and search field are always visible
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.allowedOperations.contains(CrudOperations.create))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
-                child: _buildCreateButton(),
-              ),
-            if (widget.showSearchField)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // For narrow screens (mobile), use vertical layout
+            if (constraints.maxWidth < 600) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Action buttons in a row
+                  Row(
                     children: [
-                      // Column selector dropdown
-                      if (widget.enableColumnSearch)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: SizedBox(
-                            width: 120, // Reduced width for the dropdown
-                            child: _buildColumnSearchControls(),
+                      if (widget.allowedOperations
+                          .contains(CrudOperations.create))
+                        Expanded(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: 8.0, right: 8.0),
+                            child: _buildCreateButton(),
                           ),
                         ),
-                      // Search field (text or dropdown depending on selected column)
-                      Expanded(
-                        child: _isDropdownColumn(_selectedSearchColumn ?? '') &&
-                                _selectedSearchColumn != null
-                            ? _buildDropdownSearch()
-                            : _buildTextSearch(),
-                      ),
+                      if (widget.showRefreshButton)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: _buildRefreshButton(),
+                        ),
                     ],
                   ),
-                ),
-              ),
-          ],
+                  // Search controls in vertical layout
+                  if (widget.showSearchField)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.enableColumnSearch)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: _buildColumnSearchControls(),
+                            ),
+                          _isDropdownColumn(_selectedSearchColumn ?? '') &&
+                                  _selectedSearchColumn != null
+                              ? _buildDropdownSearch()
+                              : _buildTextSearch(),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            } else {
+              // For wider screens, use horizontal layout
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.allowedOperations.contains(CrudOperations.create))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
+                      child: _buildCreateButton(),
+                    ),
+                  if (widget.showRefreshButton)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
+                      child: _buildRefreshButton(),
+                    ),
+                  if (widget.showSearchField)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.enableColumnSearch)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: SizedBox(
+                                  width: 120,
+                                  child: _buildColumnSearchControls(),
+                                ),
+                              ),
+                            Expanded(
+                              child: _isDropdownColumn(
+                                          _selectedSearchColumn ?? '') &&
+                                      _selectedSearchColumn != null
+                                  ? _buildDropdownSearch()
+                                  : _buildTextSearch(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }
+          },
         ),
         // Only the table content area shows loading state
         FutureBuilder<DynamicTableData>(
@@ -967,10 +1058,10 @@ class CrudTableState extends State<CrudTable> {
                 ),
               );
             } else if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text('No data available'),
+                  padding: const EdgeInsets.all(32.0),
+                  child: widget.noDataWidget ?? const Text('No data available'),
                 ),
               );
             }
@@ -995,6 +1086,20 @@ class CrudTableState extends State<CrudTable> {
       label: Text(widget.createButtonText),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRefreshButton() {
+    return IconButton(
+      icon: const Icon(Icons.refresh),
+      tooltip: 'Refresh Data',
+      onPressed: _refreshData,
+      style: IconButton.styleFrom(
+        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -1249,6 +1354,7 @@ class CrudTableState extends State<CrudTable> {
                             fieldGroups: widget.fieldGroups,
                             ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
                             dropdownOptionMappers: widget.dropdownOptionMappers,
+                            allTextCapitalized: widget.allTextCapitalized,
                             showSubmitButton: true,
                             onSubmit: (formData) {
                               print('Form submitted with data: $formData');
@@ -1413,6 +1519,7 @@ class CrudTableState extends State<CrudTable> {
                             fieldGroups: widget.fieldGroups,
                             ungroupedFieldsAtTop: widget.ungroupedFieldsAtTop,
                             dropdownOptionMappers: widget.dropdownOptionMappers,
+                            allTextCapitalized: widget.allTextCapitalized,
                             showSubmitButton: true,
                             onSubmit: (formData) {
                               print(

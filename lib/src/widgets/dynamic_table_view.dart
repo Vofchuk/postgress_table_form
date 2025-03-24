@@ -881,6 +881,7 @@ class _DynamicTableViewState extends State<DynamicTableView> {
         case PostgresDataType.integerArray:
         case PostgresDataType.textArray:
         case PostgresDataType.uuidArray:
+        case PostgresDataType.array:
           List<dynamic> array;
           if (value is List) {
             array = value;
@@ -895,31 +896,65 @@ class _DynamicTableViewState extends State<DynamicTableView> {
             return Text(value.toString(), style: widget.cellTextStyle);
           }
 
-          return Tooltip(
-            message: array.join(', '),
-            child: Text(
-              'Array[${array.length}]',
-              style: widget.cellTextStyle != null
-                  ? widget.cellTextStyle!.copyWith(color: Colors.blue)
-                  : const TextStyle(color: Colors.blue),
-            ),
-          );
+          // Display up to 3 items with chips, then a +more indicator if needed
+          final int maxDisplayItems = 3;
+          final bool hasMoreItems = array.length > maxDisplayItems;
+          final itemsToShow =
+              hasMoreItems ? array.take(maxDisplayItems).toList() : array;
 
-        // Geometric Types
-        case PostgresDataType.point:
-        case PostgresDataType.line:
-        case PostgresDataType.lseg:
-        case PostgresDataType.box:
-        case PostgresDataType.path:
-        case PostgresDataType.polygon:
-        case PostgresDataType.circle:
-          return Tooltip(
-            message: value.toString(),
-            child: Text(
-              'Geometric',
-              style: widget.cellTextStyle != null
-                  ? widget.cellTextStyle!.copyWith(color: Colors.purple)
-                  : const TextStyle(color: Colors.purple),
+          // Check for dropdown option mappers
+          final optionMapper = widget.dropdownOptionMappers[columnName];
+
+          return Container(
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                ...itemsToShow.map((item) {
+                  final String itemValue = item.toString();
+                  final bool hasMappedValue = optionMapper != null &&
+                      optionMapper.containsKey(itemValue);
+                  final String displayText =
+                      hasMappedValue ? optionMapper[itemValue]! : itemValue;
+
+                  final Widget chip = Chip(
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      displayText,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    backgroundColor: hasMappedValue
+                        ? Theme.of(context).primaryColor.withOpacity(0.2)
+                        : Theme.of(context).primaryColor.withOpacity(0.1),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    labelPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  );
+
+                  // Add tooltip if the display text is different from the original value
+                  return hasMappedValue
+                      ? Tooltip(
+                          message: 'Original value: $itemValue',
+                          child: chip,
+                        )
+                      : chip;
+                }),
+                if (hasMoreItems)
+                  Chip(
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      '+${array.length - maxDisplayItems}',
+                      style: const TextStyle(fontSize: 11, color: Colors.white),
+                    ),
+                    backgroundColor: Theme.of(context).primaryColor,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    labelPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  ),
+              ],
             ),
           );
 

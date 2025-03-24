@@ -579,9 +579,19 @@ class _DynamicFormState extends State<DynamicForm> {
       if (controller.text.isEmpty) {
         _formData[columnName] = null;
       } else {
-        // Just use the controller text directly
-        // The form field widgets should have already converted the value to the appropriate type
-        _formData[columnName] = controller.text;
+        // Handle array types specially - parse comma-separated values into a list
+        if (column.dataType == PostgresDataType.array) {
+          // Parse comma-separated values into a list
+          final list = controller.text
+              .split(',')
+              .map((item) => item.trim())
+              .where((item) => item.isNotEmpty)
+              .toList();
+          _formData[columnName] = list;
+        } else {
+          // For other types, just use the controller text directly
+          _formData[columnName] = controller.text;
+        }
       }
     });
   }

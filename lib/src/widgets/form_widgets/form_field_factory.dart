@@ -200,6 +200,7 @@ class FormFieldFactory {
           onChanged: (value) {
             onFieldValueChanged(column.columnName, value);
           },
+          optionLabelMapper: dropdownOptionMappers[column.columnName],
         );
 
       case PostgresDataType.userDefined:
@@ -244,7 +245,26 @@ class FormFieldFactory {
             onFieldValueChanged(column.columnName, value);
           },
         );
-
+      case PostgresDataType.array:
+        return ArrayFormFieldWidget(
+          column: column,
+          label: label,
+          isReadonly: isReadonly,
+          isRequired: isRequired,
+          displayName: displayName,
+          hintText: hintTexts[column.columnName] ?? 'Enter $displayName',
+          hasFormLevelError: hasFormLevelError,
+          formLevelErrorMessage: hasFormLevelError
+              ? getFormLevelErrorForField(column.columnName, formLevelErrors)
+              : null,
+          controller: controllers[column.columnName]!,
+          onChanged: (value) {
+            onFieldValueChanged(column.columnName, value);
+          },
+          customValidator: customValidators[column.columnName],
+          helpText: helpTexts[column.columnName],
+          optionLabelMapper: dropdownOptionMappers[column.columnName],
+        );
       default:
         return TextFormFieldWidget(
           column: column,

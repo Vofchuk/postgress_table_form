@@ -30,22 +30,33 @@ class CrudTable extends StatefulWidget {
   /// - A list of records (maps) where each record is a map with column names as keys and values as data
   /// - The total count of records (used for pagination)
   ///
-  /// The function receives the current page, page size, and search text as parameters to support pagination and searching.
-  /// It should return data for the requested page, filtered by the search text if present.
+  /// The function receives the current page, page size, search text, and optional column name parameters.
+  /// When columnName is null, it should search across all columns. When columnName is provided,
+  /// it should search only within that specific column.
   ///
   /// Example:
   /// ```dart
-  /// getData: (page, pageSize, searchText) async {
-  ///   final result = await database.query(
-  ///     'SELECT * FROM users WHERE name LIKE ? LIMIT ? OFFSET ?',
-  ///     ['%$searchText%', pageSize, (page - 1) * pageSize]
-  ///   );
-  ///   final countResult = await database.query('SELECT COUNT(*) FROM users WHERE name LIKE ?', ['%$searchText%']);
+  /// getData: (page, pageSize, searchText, columnName) async {
+  ///   String query;
+  ///   List<dynamic> params;
+  ///
+  ///   if (columnName != null) {
+  ///     // Column-specific search
+  ///     query = 'SELECT * FROM users WHERE $columnName LIKE ? LIMIT ? OFFSET ?';
+  ///     params = ['%$searchText%', pageSize, (page - 1) * pageSize];
+  ///   } else {
+  ///     // Search across multiple columns
+  ///     query = 'SELECT * FROM users WHERE name LIKE ? OR email LIKE ? LIMIT ? OFFSET ?';
+  ///     params = ['%$searchText%', '%$searchText%', pageSize, (page - 1) * pageSize];
+  ///   }
+  ///
+  ///   final result = await database.query(query, params);
+  ///   final countResult = await database.query(/* count query */);
   ///   return (result, countResult[0]['count']);
   /// }
   /// ```
   final Future<(List<Map<String, dynamic>>, int)> Function(
-      int page, int pageSize, String searchText) getData;
+      int page, int pageSize, String searchText, String? columnName) getData;
 
   /// Callback for when a record is created
   ///
@@ -225,6 +236,31 @@ class CrudTable extends StatefulWidget {
   /// Default is 300 milliseconds
   final int searchDebounceTime;
 
+  /// Whether to enable column-specific search
+  ///
+  /// When true, a column selector will be displayed next to the search field,
+  /// allowing users to search on specific columns.
+  /// Default is false
+  final bool enableColumnSearch;
+
+  /// List of column names available for search
+  ///
+  /// If provided, only these columns will be available for selection in the column search dropdown.
+  /// If not provided, all visible columns will be available for search.
+  final List<String> searchableColumns;
+
+  /// Hint text for the column search dropdown
+  ///
+  /// The placeholder text displayed in the column search dropdown.
+  /// Default is 'Select column'
+  final String columnSearchHintText;
+
+  /// Text for the "Search All" option in the column search dropdown
+  ///
+  /// This is the text shown for the option that searches across all columns.
+  /// Default is 'Search All'
+  final String searchAllText;
+
   /// Key to access the CrudTable state
   ///
   /// Use this key to access pagination methods like setPageSize and refreshData.
@@ -331,6 +367,10 @@ class CrudTable extends StatefulWidget {
     this.onSearch,
     this.searchHintText = 'Search...',
     this.searchDebounceTime = 300,
+    this.enableColumnSearch = false,
+    this.searchableColumns = const [],
+    this.columnSearchHintText = 'Select column',
+    this.searchAllText = 'Search All',
   });
 
   @override
@@ -345,8 +385,8 @@ class CrudTable extends StatefulWidget {
   /// ```dart
   /// CrudTable.fromFuture(
   ///   tableDefinitionFuture: fetchTableDefinition(),
-  ///   getData: (page, pageSize, searchText) async {
-  ///     final result = await api.fetchData(page, pageSize, searchText);
+  ///   getData: (page, pageSize, searchText, columnName) async {
+  ///     final result = await api.fetchData(page, pageSize, searchText, columnName);
   ///     final count = await api.fetchCount(searchText);
   ///     return (result, count);
   ///   },
@@ -357,7 +397,7 @@ class CrudTable extends StatefulWidget {
     Key? key,
     required Future<TableDefinitionModel> tableDefinitionFuture,
     required Future<(List<Map<String, dynamic>>, int)> Function(
-            int page, int pageSize, String searchText)
+            int page, int pageSize, String searchText, String? columnName)
         getData,
     Future<bool> Function(Map<String, dynamic> formData)? onCreate,
     Future<bool> Function(Map<String, dynamic> formData)? onUpdate,
@@ -415,6 +455,10 @@ class CrudTable extends StatefulWidget {
     Function(String)? onSearch,
     String searchHintText = 'Search...',
     int searchDebounceTime = 300,
+    bool enableColumnSearch = false,
+    List<String> searchableColumns = const [],
+    String columnSearchHintText = 'Select column',
+    String searchAllText = 'Search All',
   }) {
     return FutureBuilder<TableDefinitionModel>(
       future: tableDefinitionFuture,
@@ -489,6 +533,10 @@ class CrudTable extends StatefulWidget {
           onSearch: onSearch,
           searchHintText: searchHintText,
           searchDebounceTime: searchDebounceTime,
+          enableColumnSearch: enableColumnSearch,
+          searchableColumns: searchableColumns,
+          columnSearchHintText: columnSearchHintText,
+          searchAllText: searchAllText,
         );
       },
     );
@@ -567,22 +615,50 @@ class CrudTable extends StatefulWidget {
     Function(String)? onSearch,
     String searchHintText = 'Search...',
     int searchDebounceTime = 300,
+    bool enableColumnSearch = false,
+    List<String> searchableColumns = const [],
+    String columnSearchHintText = 'Select column',
+    String searchAllText = 'Search All',
   }) {
     // Keep track of the current search text for total count calculation
     String currentSearchText = '';
+    String? currentSearchColumn;
 
     return CrudTable(
       key: key,
       tableKey: tableKey,
       tableDefinition: tableDefinition,
-      getData: (page, pageSize, searchText) async {
-        // Update the current search text
+      getData: (page, pageSize, searchText, columnName) async {
+        // Update the current search parameters
         currentSearchText = searchText;
+        currentSearchColumn = columnName;
 
-        // Filter data if there's a search term
-        final filteredData = searchText.isEmpty
-            ? data
-            : data.where((item) => _matchesSearch(item, searchText)).toList();
+        // Filter data based on search text and column
+        List<Map<String, dynamic>> filteredData;
+
+        if (searchText.isEmpty) {
+          // If no search text, return all data
+          filteredData = data;
+        } else if (columnName != null) {
+          // Filter by specific column
+          filteredData = data.where((item) {
+            // Check if the item has the column
+            if (!item.containsKey(columnName)) return false;
+
+            final value = item[columnName];
+            if (value == null) return false;
+
+            // Case-insensitive contains search
+            return value
+                .toString()
+                .toLowerCase()
+                .contains(searchText.toLowerCase());
+          }).toList();
+        } else {
+          // Search across all columns
+          filteredData =
+              data.where((item) => _matchesSearch(item, searchText)).toList();
+        }
 
         // Calculate pagination for the in-memory list
         final int startIndex = (page - 1) * pageSize;
@@ -649,6 +725,10 @@ class CrudTable extends StatefulWidget {
       onSearch: onSearch,
       searchHintText: searchHintText,
       searchDebounceTime: searchDebounceTime,
+      enableColumnSearch: enableColumnSearch,
+      searchableColumns: searchableColumns,
+      columnSearchHintText: columnSearchHintText,
+      searchAllText: searchAllText,
     );
   }
 }
@@ -672,6 +752,8 @@ class CrudTableState extends State<CrudTable> {
 
   // Search state
   String _searchText = '';
+  String? _selectedSearchColumn;
+  String? _selectedDropdownValue;
 
   // Search controller and debounce timer
   late TextEditingController _searchController;
@@ -770,9 +852,11 @@ class CrudTableState extends State<CrudTable> {
 
   void _refreshData() {
     setState(() {
-      // Get the data and count for the current page with the current search text
-      _dataFuture =
-          widget.getData(_currentPage, _pageSize, _searchText).then((results) {
+      // Get data based on search parameters (with or without column filter)
+      _dataFuture = widget
+          .getData(_currentPage, _pageSize, _searchText,
+              widget.enableColumnSearch ? _selectedSearchColumn : null)
+          .then((results) {
         final data = results.$1;
         final totalCount = results.$2;
 
@@ -791,6 +875,36 @@ class CrudTableState extends State<CrudTable> {
     });
   }
 
+  // Helper method to determine if a column is a dropdown type
+  bool _isDropdownColumn(String columnName) {
+    return widget.dropdownOptionMappers.containsKey(columnName);
+  }
+
+  // Helper method to get a list of searchable columns
+  List<String> _getSearchableColumns() {
+    if (widget.searchableColumns.isNotEmpty) {
+      // Filter out any columns that aren't in the table definition
+      return widget.searchableColumns.where((column) {
+        return widget.tableDefinition.getAllColumns().any(
+              (col) => col.columnName == column,
+            );
+      }).toList();
+    }
+
+    // If no searchable columns are specified, use all visible columns
+    return widget.tableDefinition
+        .getAllColumns()
+        .where(
+            (column) => !widget.hiddenTableColumns.contains(column.columnName))
+        .map((column) => column.columnName)
+        .toList();
+  }
+
+  // Helper method to get display name for a column
+  String _getColumnDisplayName(String columnName) {
+    return widget.columnNameMapper[columnName] ?? columnName;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -798,6 +912,7 @@ class CrudTableState extends State<CrudTable> {
       children: [
         // Create button and search field are always visible
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (widget.allowedOperations.contains(CrudOperations.create))
               Padding(
@@ -808,41 +923,26 @@ class CrudTableState extends State<CrudTable> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: widget.searchHintText,
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Column selector dropdown
+                      if (widget.enableColumnSearch)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: SizedBox(
+                            width: 120, // Reduced width for the dropdown
+                            child: _buildColumnSearchControls(),
+                          ),
+                        ),
+                      // Search field (text or dropdown depending on selected column)
+                      Expanded(
+                        child: _isDropdownColumn(_selectedSearchColumn ?? '') &&
+                                _selectedSearchColumn != null
+                            ? _buildDropdownSearch()
+                            : _buildTextSearch(),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 0.0, horizontal: 12.0),
-                      isDense: true,
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                // Clear the controller text
-                                _searchController.clear();
-
-                                // Force immediate search with empty string on clear
-                                // Don't wait for debounce here
-                                setState(() {
-                                  _searchText = '';
-                                });
-
-                                // Cancel any pending debounce timer
-                                if (_debounceTimer?.isActive ?? false) {
-                                  _debounceTimer!.cancel();
-                                }
-
-                                // Explicitly trigger search with empty string
-                                _refreshData();
-                              },
-                            )
-                          : null,
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -1455,16 +1555,183 @@ class CrudTableState extends State<CrudTable> {
 
     // If the widget is rebuilt with a different table definition or other key properties changed,
     // we may need to refresh the data, but we should preserve the search state
+    bool shouldRefresh = false;
+
     if (oldWidget.tableDefinition != widget.tableDefinition ||
         oldWidget.initialPageSize != widget.initialPageSize) {
-      _refreshData();
+      shouldRefresh = true;
     }
 
-    // Always preserve the search state
-    // This ensures the search field doesn't lose its content during widget updates
+    // If column search was enabled/disabled or searchable columns changed
+    if (oldWidget.enableColumnSearch != widget.enableColumnSearch) {
+      // If column search was disabled, reset the selected column
+      if (!widget.enableColumnSearch) {
+        _selectedSearchColumn = null;
+        _selectedDropdownValue = null;
+      }
+      shouldRefresh = true;
+    }
+
+    // If dropdown mappings changed and we're using a dropdown search
+    if (oldWidget.dropdownOptionMappers != widget.dropdownOptionMappers &&
+        _selectedSearchColumn != null &&
+        _isDropdownColumn(_selectedSearchColumn!)) {
+      // Verify dropdown value is still valid in the new options
+      final options =
+          widget.dropdownOptionMappers[_selectedSearchColumn!] ?? {};
+      if (_selectedDropdownValue != null &&
+          !options.containsKey(_selectedDropdownValue)) {
+        _selectedDropdownValue = null;
+        _searchText = '';
+        shouldRefresh = true;
+      }
+    }
+
+    // Always preserve the search text state in the controller
     if (_searchController.text != _searchText) {
       _searchController.text = _searchText;
     }
+
+    if (shouldRefresh) {
+      _refreshData();
+    }
+  }
+
+  // Build dropdown for column selection
+  Widget _buildColumnSearchControls() {
+    final searchableColumns = _getSearchableColumns();
+
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+        hintText: widget.columnSearchHintText,
+      ),
+      isExpanded: true,
+      icon: const Icon(Icons.arrow_drop_down, size: 20),
+      value: _selectedSearchColumn,
+      items: [
+        // Add a "Search All" option
+        DropdownMenuItem<String>(
+          value: null,
+          child: Text(
+            widget.searchAllText,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
+          ),
+        ),
+        // Add all searchable columns
+        ...searchableColumns.map((column) {
+          return DropdownMenuItem<String>(
+            value: column,
+            child: Text(
+              _getColumnDisplayName(column),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          );
+        }),
+      ],
+      onChanged: (String? newValue) {
+        setState(() {
+          // Reset search when changing column
+          if (_selectedSearchColumn != newValue) {
+            _searchController.clear();
+            _searchText = '';
+            _selectedDropdownValue = null;
+          }
+
+          _selectedSearchColumn = newValue;
+          _refreshData();
+        });
+      },
+    );
+  }
+
+  // Build text search field
+  Widget _buildTextSearch() {
+    return TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: widget.searchHintText,
+        prefixIcon: const Icon(Icons.search),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
+        isDense: true,
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  // Clear the controller text
+                  _searchController.clear();
+
+                  // Force immediate search with empty string on clear
+                  // Don't wait for debounce here
+                  setState(() {
+                    _searchText = '';
+                  });
+
+                  // Cancel any pending debounce timer
+                  if (_debounceTimer?.isActive ?? false) {
+                    _debounceTimer!.cancel();
+                  }
+
+                  // Explicitly trigger search with empty string
+                  _refreshData();
+                },
+              )
+            : null,
+      ),
+    );
+  }
+
+  // Build dropdown search for enum columns
+  Widget _buildDropdownSearch() {
+    // Get the dropdown options for this column
+    final columnName = _selectedSearchColumn!;
+    final optionMapper = widget.dropdownOptionMappers[columnName] ?? {};
+
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        hintText: 'Select ${_getColumnDisplayName(columnName)}',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        isDense: true,
+      ),
+      value: _selectedDropdownValue,
+      items: [
+        // Add an empty option
+        const DropdownMenuItem<String>(
+          value: null,
+          child: Text('Any'),
+        ),
+        // Add all options from the mapper
+        ...optionMapper.entries.map((entry) {
+          return DropdownMenuItem<String>(
+            value: entry.key,
+            child: Text(entry.value),
+          );
+        }),
+      ],
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedDropdownValue = newValue;
+          _searchText = newValue ?? '';
+          _currentPage = 1; // Reset to first page when searching
+          _refreshData();
+        });
+      },
+    );
   }
 }
 

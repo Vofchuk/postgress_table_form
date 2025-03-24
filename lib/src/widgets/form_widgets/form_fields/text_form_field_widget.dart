@@ -38,6 +38,7 @@ class TextFormFieldWidget extends StatelessWidget {
       children: [
         TextFormField(
           controller: controller,
+          enableInteractiveSelection: true,
           decoration: InputDecoration(
             labelText: label,
             hintText: hintText,
@@ -70,7 +71,7 @@ class TextFormFieldWidget extends StatelessWidget {
             errorText: hasFormLevelError ? formLevelErrorMessage : null,
           ),
           readOnly: isReadonly,
-          enabled: !isReadonly,
+          enabled: true,
           style: TextStyle(
             color: isReadonly ? Colors.grey.shade700 : Colors.black87,
             fontSize: 15,

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:postgress_table_form/src/models/column_definition _model/column_definition_model.dart';
+import 'package:postgress_table_form/src/widgets/form_widgets/form_field_utils.dart';
 
 class JsonFormFieldWidget extends StatelessWidget {
   final ColumnDefinitionModel column;
@@ -80,8 +81,12 @@ class JsonFormFieldWidget extends StatelessWidget {
             fontFamily: 'monospace',
           ),
           validator: (value) {
-            // Required field validation
-            if (isRequired && (value == null || value.isEmpty)) {
+            // Required field validation - skip for readonly fields
+            if (FormFieldUtils.shouldValidateAsRequired(
+                  isRequired: isRequired,
+                  isReadonly: isReadonly,
+                ) &&
+                (value == null || value.isEmpty)) {
               return '$displayName is required';
             }
 

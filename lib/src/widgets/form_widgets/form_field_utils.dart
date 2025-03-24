@@ -20,6 +20,21 @@ class FormFieldUtils {
     }
   }
 
+  /// Determines if a field should be validated as required
+  /// If a field is readonly, it should not be validated as required even if isRequired is true
+  static bool shouldValidateAsRequired({
+    required bool isRequired,
+    required bool isReadonly,
+  }) {
+    // If the field is readonly, it should not be validated as required
+    if (isReadonly) {
+      return false;
+    }
+
+    // Otherwise, follow the isRequired parameter
+    return isRequired;
+  }
+
   /// Determines if a field should be hidden based on the configuration
   static bool isFieldHidden({
     required String columnName,

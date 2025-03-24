@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:postgress_table_form/src/models/column_definition _model/column_definition_model.dart';
+import 'package:postgress_table_form/src/widgets/form_widgets/form_field_utils.dart';
 
 class BooleanFormFieldWidget extends StatelessWidget {
   final ColumnDefinitionModel column;
@@ -34,8 +35,12 @@ class BooleanFormFieldWidget extends StatelessWidget {
     return FormField<bool>(
       initialValue: initialValue ?? false,
       validator: (value) {
-        // Required field validation
-        if (isRequired && value == null) {
+        // Required field validation - skip for readonly fields
+        if (FormFieldUtils.shouldValidateAsRequired(
+              isRequired: isRequired,
+              isReadonly: isReadonly,
+            ) &&
+            value == null) {
           return '$displayName is required';
         }
 

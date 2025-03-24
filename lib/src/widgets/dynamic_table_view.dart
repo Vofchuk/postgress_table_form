@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:postgress_table_form/src/models/column_definition _model/column_definition_model.dart';
@@ -245,6 +247,37 @@ class DynamicTableView extends StatefulWidget {
   /// Default is true
   final bool showVerticalScrollbar;
 
+  /// Text to display for null values
+  ///
+  /// This text will be shown in the table cells when a value is null.
+  /// Default is an empty string
+  final String nullValueText;
+
+  /// Whether to show a search field above the table
+  ///
+  /// When true, a search field will be displayed above the table,
+  /// allowing users to filter the table data.
+  /// Default is false
+  final bool showSearchField;
+
+  /// Callback for when the search text changes
+  ///
+  /// This function is called with the search text when the user types in the search field.
+  /// It is debounced according to [searchDebounceTime].
+  final Function(String)? onSearch;
+
+  /// Hint text for the search field
+  ///
+  /// The placeholder text displayed in the search field.
+  /// Default is 'Search...'
+  final String searchHintText;
+
+  /// Debounce time for search in milliseconds
+  ///
+  /// The time to wait after the user stops typing before triggering the search.
+  /// Default is 300 milliseconds
+  final int searchDebounceTime;
+
   /// Creates a dynamic table view
   ///
   /// [tableDefinition] and [data] are required parameters.
@@ -276,6 +309,11 @@ class DynamicTableView extends StatefulWidget {
     this.advancedCustomCellBuilders,
     this.showHorizontalScrollbar = true,
     this.showVerticalScrollbar = true,
+    this.nullValueText = '',
+    this.showSearchField = false,
+    this.onSearch,
+    this.searchHintText = 'Search...',
+    this.searchDebounceTime = 300,
   });
 
   @override
@@ -287,22 +325,128 @@ class _DynamicTableViewState extends State<DynamicTableView> {
   late final ScrollController _horizontalController;
   late final ScrollController _verticalController;
 
+  // Controller for search field
+  late final TextEditingController _searchController;
+
+  // Timer for debouncing search
+  Timer? _debounceTimer;
+
+  // Search text
+  String _searchText = '';
+
   @override
   void initState() {
     super.initState();
     _horizontalController = ScrollController();
     _verticalController = ScrollController();
+    _searchController = TextEditingController();
+
+    // Set up listener for search field
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didUpdateWidget(DynamicTableView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // If the widget is rebuilt due to state changes in parent but search should remain,
+    // ensure we don't trigger unnecessary search callbacks
+    if (oldWidget.showSearchField && widget.showSearchField) {
+      // We don't need to do anything here, just prevent losing search text
+    }
+  }
+
+  void _onSearchChanged() {
+    final text = _searchController.text;
+
+    // Cancel previous timer if it exists
+    if (_debounceTimer?.isActive ?? false) {
+      _debounceTimer!.cancel();
+    }
+
+    // Set up new timer
+    _debounceTimer =
+        Timer(Duration(milliseconds: widget.searchDebounceTime), () {
+      // Always trigger the search callback when text changes, including when it becomes empty
+      if (_searchText != text) {
+        setState(() {
+          _searchText = text;
+        });
+
+        // Call onSearch callback if provided
+        if (widget.onSearch != null) {
+          widget.onSearch!(text);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _horizontalController.dispose();
     _verticalController.dispose();
+    _searchController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.showSearchField) _buildSearchField(),
+        _buildTable(),
+      ],
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: widget.searchHintText,
+          prefixIcon: const Icon(Icons.search),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0.0, horizontal: 12.0),
+          isDense: true,
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    // Clear the controller text
+                    _searchController.clear();
+
+                    // Force immediate search with empty string on clear
+                    // Don't wait for debounce here
+                    setState(() {
+                      _searchText = '';
+                    });
+
+                    // Cancel any pending debounce timer
+                    if (_debounceTimer?.isActive ?? false) {
+                      _debounceTimer!.cancel();
+                    }
+
+                    // Explicitly trigger search with empty string
+                    if (widget.onSearch != null) {
+                      widget.onSearch!('');
+                    }
+                  },
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTable() {
     Widget tableWidget = DataTable(
       columns: _buildColumns(),
       rows: _buildRows(),
@@ -600,8 +744,8 @@ class _DynamicTableViewState extends State<DynamicTableView> {
   Widget _buildCellWidget(
       dynamic value, PostgresDataType dataType, String columnName) {
     if (value == null) {
-      return const Text('NULL',
-          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
+      return Text(widget.nullValueText,
+          style: widget.cellTextStyle?.copyWith(fontStyle: FontStyle.italic));
     }
 
     try {

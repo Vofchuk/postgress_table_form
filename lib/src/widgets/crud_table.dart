@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -25,29 +26,26 @@ class CrudTable extends StatefulWidget {
 
   /// Function that fetches data for the table
   ///
-  /// This function should return a Future that resolves to a list of records (maps).
-  /// Each record is a map where keys are column names and values are the data.
+  /// This function should return a Future that resolves to a tuple containing:
+  /// - A list of records (maps) where each record is a map with column names as keys and values as data
+  /// - The total count of records (used for pagination)
   ///
-  /// The function receives the current page and page size as parameters to support pagination.
-  /// It should return data for the requested page.
-  ///
-  /// The component will handle pagination internally based on the total count of records.
-  final Future<List<Map<String, dynamic>>> Function(int page, int pageSize)
-      getData;
-
-  /// Function that returns the total count of records
-  ///
-  /// This function is used for pagination to calculate the total number of pages.
-  /// If not provided, the component will use the length of the data returned by [getData].
+  /// The function receives the current page, page size, and search text as parameters to support pagination and searching.
+  /// It should return data for the requested page, filtered by the search text if present.
   ///
   /// Example:
   /// ```dart
-  /// getTotalCount: () async {
-  ///   final result = await database.query('SELECT COUNT(*) FROM users');
-  ///   return result[0]['count'];
+  /// getData: (page, pageSize, searchText) async {
+  ///   final result = await database.query(
+  ///     'SELECT * FROM users WHERE name LIKE ? LIMIT ? OFFSET ?',
+  ///     ['%$searchText%', pageSize, (page - 1) * pageSize]
+  ///   );
+  ///   final countResult = await database.query('SELECT COUNT(*) FROM users WHERE name LIKE ?', ['%$searchText%']);
+  ///   return (result, countResult[0]['count']);
   /// }
   /// ```
-  final Future<int> Function()? getTotalCount;
+  final Future<(List<Map<String, dynamic>>, int)> Function(
+      int page, int pageSize, String searchText) getData;
 
   /// Callback for when a record is created
   ///
@@ -196,6 +194,37 @@ class CrudTable extends StatefulWidget {
   /// Custom styling for the table
   final DataTableThemeData? tableTheme;
 
+  /// Text to display for null values in the table
+  ///
+  /// This text will be shown in the table cells when a value is null.
+  /// Default is an empty string
+  final String nullValueText;
+
+  /// Whether to show a search field above the table
+  ///
+  /// When true, a search field will be displayed above the table,
+  /// allowing users to filter the table data.
+  /// Default is false
+  final bool showSearchField;
+
+  /// Callback for when the search text changes
+  ///
+  /// This function is called with the search text when the user types in the search field.
+  /// It is debounced according to [searchDebounceTime].
+  final Function(String)? onSearch;
+
+  /// Hint text for the search field
+  ///
+  /// The placeholder text displayed in the search field.
+  /// Default is 'Search...'
+  final String searchHintText;
+
+  /// Debounce time for search in milliseconds
+  ///
+  /// The time to wait after the user stops typing before triggering the search.
+  /// Default is 300 milliseconds
+  final int searchDebounceTime;
+
   /// Key to access the CrudTable state
   ///
   /// Use this key to access pagination methods like setPageSize and refreshData.
@@ -247,7 +276,6 @@ class CrudTable extends StatefulWidget {
     this.tableKey,
     required this.tableDefinition,
     required this.getData,
-    this.getTotalCount,
     this.onCreate,
     this.onUpdate,
     this.onDelete,
@@ -298,6 +326,11 @@ class CrudTable extends StatefulWidget {
     this.additionalActionBuilder,
     this.pageSizeOptions = const [5, 10, 25, 50, 100],
     this.initialPageSize = 10,
+    this.nullValueText = '',
+    this.showSearchField = false,
+    this.onSearch,
+    this.searchHintText = 'Search...',
+    this.searchDebounceTime = 300,
   });
 
   @override
@@ -312,16 +345,20 @@ class CrudTable extends StatefulWidget {
   /// ```dart
   /// CrudTable.fromFuture(
   ///   tableDefinitionFuture: fetchTableDefinition(),
-  ///   getData: (page, pageSize) => fetchData(page, pageSize),
+  ///   getData: (page, pageSize, searchText) async {
+  ///     final result = await api.fetchData(page, pageSize, searchText);
+  ///     final count = await api.fetchCount(searchText);
+  ///     return (result, count);
+  ///   },
   ///   // ... other parameters
   /// )
   /// ```
   static Widget fromFuture({
     Key? key,
     required Future<TableDefinitionModel> tableDefinitionFuture,
-    required Future<List<Map<String, dynamic>>> Function(int page, int pageSize)
+    required Future<(List<Map<String, dynamic>>, int)> Function(
+            int page, int pageSize, String searchText)
         getData,
-    Future<int> Function()? getTotalCount,
     Future<bool> Function(Map<String, dynamic> formData)? onCreate,
     Future<bool> Function(Map<String, dynamic> formData)? onUpdate,
     Future<bool> Function(Map<String, dynamic> rowData)? onDelete,
@@ -373,6 +410,11 @@ class CrudTable extends StatefulWidget {
     ActionBuilder? additionalActionBuilder,
     List<int> pageSizeOptions = const [5, 10, 25, 50, 100],
     int initialPageSize = 10,
+    String nullValueText = '',
+    bool showSearchField = false,
+    Function(String)? onSearch,
+    String searchHintText = 'Search...',
+    int searchDebounceTime = 300,
   }) {
     return FutureBuilder<TableDefinitionModel>(
       future: tableDefinitionFuture,
@@ -397,7 +439,6 @@ class CrudTable extends StatefulWidget {
           tableKey: tableKey,
           tableDefinition: snapshot.data!,
           getData: getData,
-          getTotalCount: getTotalCount,
           onCreate: onCreate,
           onUpdate: onUpdate,
           onDelete: onDelete,
@@ -443,6 +484,11 @@ class CrudTable extends StatefulWidget {
           additionalActionBuilder: additionalActionBuilder,
           pageSizeOptions: pageSizeOptions,
           initialPageSize: initialPageSize,
+          nullValueText: nullValueText,
+          showSearchField: showSearchField,
+          onSearch: onSearch,
+          searchHintText: searchHintText,
+          searchDebounceTime: searchDebounceTime,
         );
       },
     );
@@ -516,26 +562,42 @@ class CrudTable extends StatefulWidget {
     ActionBuilder? additionalActionBuilder,
     List<int> pageSizeOptions = const [5, 10, 25, 50, 100],
     int initialPageSize = 10,
+    String nullValueText = '',
+    bool showSearchField = false,
+    Function(String)? onSearch,
+    String searchHintText = 'Search...',
+    int searchDebounceTime = 300,
   }) {
+    // Keep track of the current search text for total count calculation
+    String currentSearchText = '';
+
     return CrudTable(
       key: key,
       tableKey: tableKey,
       tableDefinition: tableDefinition,
-      getData: (page, pageSize) async {
+      getData: (page, pageSize, searchText) async {
+        // Update the current search text
+        currentSearchText = searchText;
+
+        // Filter data if there's a search term
+        final filteredData = searchText.isEmpty
+            ? data
+            : data.where((item) => _matchesSearch(item, searchText)).toList();
+
         // Calculate pagination for the in-memory list
         final int startIndex = (page - 1) * pageSize;
-        final int endIndex = startIndex + pageSize > data.length
-            ? data.length
+        final int endIndex = startIndex + pageSize > filteredData.length
+            ? filteredData.length
             : startIndex + pageSize;
 
         // Return a subset of the data based on the requested page
         final List<Map<String, dynamic>> pagedData =
-            startIndex < data.length ? data.sublist(startIndex, endIndex) : [];
+            startIndex < filteredData.length
+                ? filteredData.sublist(startIndex, endIndex)
+                : [];
 
-        return pagedData;
-      },
-      getTotalCount: () async {
-        return data.length;
+        // Return tuple with data and total count
+        return (pagedData, filteredData.length);
       },
       onCreate: onCreate,
       onUpdate: onUpdate,
@@ -582,6 +644,11 @@ class CrudTable extends StatefulWidget {
       additionalActionBuilder: additionalActionBuilder,
       pageSizeOptions: pageSizeOptions,
       initialPageSize: initialPageSize,
+      nullValueText: nullValueText,
+      showSearchField: showSearchField,
+      onSearch: onSearch,
+      searchHintText: searchHintText,
+      searchDebounceTime: searchDebounceTime,
     );
   }
 }
@@ -603,12 +670,56 @@ class CrudTableState extends State<CrudTable> {
   Map<String, dynamic> _createFormData = {};
   Map<String, dynamic> _updateFormData = {};
 
+  // Search state
+  String _searchText = '';
+
+  // Search controller and debounce timer
+  late TextEditingController _searchController;
+  Timer? _debounceTimer;
+
   @override
   void initState() {
     super.initState();
     _currentPage = 1;
     _pageSize = widget.initialPageSize;
+    _searchController = TextEditingController();
+    _setupSearchListener();
     _refreshData();
+  }
+
+  void _setupSearchListener() {
+    _searchController.addListener(() {
+      final text = _searchController.text;
+
+      // Cancel previous timer if it exists
+      if (_debounceTimer?.isActive ?? false) {
+        _debounceTimer!.cancel();
+      }
+
+      // Set up new timer
+      _debounceTimer =
+          Timer(Duration(milliseconds: widget.searchDebounceTime), () {
+        if (_searchText != text) {
+          setState(() {
+            _searchText = text;
+            _currentPage = 1; // Reset to first page when searching
+          });
+          _refreshData();
+
+          // Call the external onSearch if provided
+          if (widget.onSearch != null) {
+            widget.onSearch!(text);
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 
   /// Updates the page size and refreshes the data
@@ -659,18 +770,11 @@ class CrudTableState extends State<CrudTable> {
 
   void _refreshData() {
     setState(() {
-      // First, get the data for the current page
-      final dataFuture = widget.getData(_currentPage, _pageSize);
-
-      // If getTotalCount is provided, use it to get the total count
-      final totalCountFuture = widget.getTotalCount != null
-          ? widget.getTotalCount!()
-          : dataFuture.then((result) => result.length);
-
-      // Combine the futures
-      _dataFuture = Future.wait([dataFuture, totalCountFuture]).then((results) {
-        final data = results[0] as List<Map<String, dynamic>>;
-        final totalCount = results[1] as int;
+      // Get the data and count for the current page with the current search text
+      _dataFuture =
+          widget.getData(_currentPage, _pageSize, _searchText).then((results) {
+        final data = results.$1;
+        final totalCount = results.$2;
 
         // Store the total count for pagination
         _totalCount = totalCount;
@@ -692,16 +796,69 @@ class CrudTableState extends State<CrudTable> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.allowedOperations.contains(CrudOperations.create))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: _buildCreateButton(),
-          ),
+        // Create button and search field are always visible
+        Row(
+          children: [
+            if (widget.allowedOperations.contains(CrudOperations.create))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
+                child: _buildCreateButton(),
+              ),
+            if (widget.showSearchField)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: widget.searchHintText,
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10.0),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0.0, horizontal: 12.0),
+                      isDense: true,
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                // Clear the controller text
+                                _searchController.clear();
+
+                                // Force immediate search with empty string on clear
+                                // Don't wait for debounce here
+                                setState(() {
+                                  _searchText = '';
+                                });
+
+                                // Cancel any pending debounce timer
+                                if (_debounceTimer?.isActive ?? false) {
+                                  _debounceTimer!.cancel();
+                                }
+
+                                // Explicitly trigger search with empty string
+                                _refreshData();
+                              },
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        // Only the table content area shows loading state
         FutureBuilder<DynamicTableData>(
           future: _dataFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: CircularProgressIndicator(),
+                ),
+              );
             } else if (snapshot.hasError) {
               return Center(
                 child: Text(
@@ -711,7 +868,10 @@ class CrudTableState extends State<CrudTable> {
               );
             } else if (!snapshot.hasData || snapshot.data!.data.isEmpty) {
               return const Center(
-                child: Text('No data available'),
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Text('No data available'),
+                ),
               );
             }
 
@@ -768,6 +928,10 @@ class CrudTableState extends State<CrudTable> {
       customCellBuilders: widget.customCellBuilders,
       advancedCustomCellBuilders: widget.advancedCustomCellBuilders,
       tableTheme: widget.tableTheme,
+      nullValueText: widget.nullValueText,
+      showSearchField: false,
+      searchHintText: widget.searchHintText,
+      searchDebounceTime: widget.searchDebounceTime,
     );
   }
 
@@ -1284,4 +1448,33 @@ class CrudTableState extends State<CrudTable> {
       }
     }
   }
+
+  @override
+  void didUpdateWidget(CrudTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // If the widget is rebuilt with a different table definition or other key properties changed,
+    // we may need to refresh the data, but we should preserve the search state
+    if (oldWidget.tableDefinition != widget.tableDefinition ||
+        oldWidget.initialPageSize != widget.initialPageSize) {
+      _refreshData();
+    }
+
+    // Always preserve the search state
+    // This ensures the search field doesn't lose its content during widget updates
+    if (_searchController.text != _searchText) {
+      _searchController.text = _searchText;
+    }
+  }
+}
+
+// Helper function to check if an item matches the search text
+bool _matchesSearch(Map<String, dynamic> item, String searchText) {
+  final searchLower = searchText.toLowerCase();
+
+  // Check if any field in the item contains the search text
+  return item.values.any((value) {
+    if (value == null) return false;
+    return value.toString().toLowerCase().contains(searchLower);
+  });
 }
